@@ -1,0 +1,223 @@
+Two coupled RLC Dimers with realistic gain
+
+*-------------------------------------------------------------
+* Parameters...
+*--------------------------------------------------------------
+
+.param pi = 3.1415926535
+
+.param gainr1 = 852.6736705514713                  $ gain resonator 1 resistance
+.param gainr2 = 1329.0711891054173                  $ gain resonator 2 resistance
+.param gainr3 = 2258.871080572179                  $ gain resonator 3 resistance
+.param gainr4 = 5353.046523843004                  $ gain resonator 4 resistance
+
+.param resc1 = 789.4769527719492p                   $ resonator capacitance of resonator 1
+.param resc2 = 839.4466035613801p                   $ resonator capacitance of resonator 2
+.param resc3 = 1184.136675318708p                   $ resonator capacitance of resonator 3
+.param resc4 = 832.1911463238p                   $ resonator capacitance of resonator 4
+
+.param resl1 = 200u                    $ resonator inductance of resonator 1
+.param resl2 = 200u                    $ resonator inductance of resonator 2
+.param resl3 = 200u                    $ resonator inductance of resonator 3
+.param resl4 = 200u                    $ resonator inductance of resonator 4
+
+.param factor1= 0.48847719931004796                   $ factor in [0:1] modifies the shape of the nonlinear loss in resonator 1
+.param factor2= 0.14650655761070466                    $ factor in [0:1] modifies the shape of the nonlinear loss in resonator 2
+.param factor3= 0.2971760195887082                    $ factor in [0:1] modifies the shape of the nonlinear loss in resonator 3
+.param factor4= 0.15902243181628042                   $ factor in [0:1] modifies the shape of the nonlinear loss in resonator 4
+
+.param lam1  = 0.40938412241891464                     $ scaling of coupling capacitance 1
+.param lam2  = 0.05910674757541228                     $ scaling of coupling capacitance 2
+.param lam3  = 0.4823884625128188                     $ scaling of coupling capacitance 3
+
+.param ccoupl1 = {lam1*resc1}            $ coupling of resonators 1 & 2
+.param ccoupl2 = {lam2*resc1}            $ coupling of resonators 2 & 3
+.param ccoupl3 = {lam3*resc1}            $ coupling of resonators 3 & 4
+
+.param natangfreq = 1/sqrt(resl1*resc1) $ natural angular frequency of the circuit
+.param natfreq = natangfreq/(2*pi)    $ natural frequency of circuit
+.param timestep = 1/(200*natfreq)     $ timestep 
+.param tau = 2000/(natfreq)           $ total evolution time
+.param voltdivr = 550
+
+
+*initial voltages
+.ic v(lcnode1)=0.5 v(lcnode2)=0 v(lcnode3)=0.25 v(lcnode4)=0
+
+*====== circuit definition ======
+*RESONATOR 1 WITH GAIN AND NONLINEAR LOSS
+L1        lcnode1     0           {resl1}
+C1        lcnode1     0           {resc1}
+
+*Gain 
+* generic op-amp (in+ in- out gnd)
+Xopamp1 lcnode1  vd1  vo1  0   OpAmp
+
+* 2:1 voltage divider for 2X gain
+Rd11  vo1 vd1 {voltdivr}
+Rd12  vd1 0  {voltdivr}
+
+* positive feedback creating negative resistance
+Rfb1      vo1    lcnode1   {gainr1}
+
+* Nonlinear loss
+*resistance to ground with back-to-back Diodes
+R1 lcnode1 lcnode1b  {factor1*gainr1}
+D11 lcnode1b 0 1N914
+D12 0 lcnode1b 1N914
+
+
+*RESONATOR 2 WITH LINEAR GAIN
+L2        lcnode2     0           {resl2}
+C2        lcnode2     0           {resc2}
+
+*Gain
+* generic op-amp (in+ in- out gnd)
+Xopamp2 lcnode2  vd2  vo2  0   OpAmp
+
+* 2:1 voltage divider for 2X gain
+Rd21  vo2 vd2 {voltdivr}
+Rd22  vd2 0  {voltdivr}
+
+* positive feedback creating negative resistance
+Rfb2      vo2    lcnode2   {gainr2}
+
+* Nonlinear loss
+*resistance to ground with back-to-back Diodes
+R2 lcnode2 lcnode2b  {factor2*gainr2}
+D21 lcnode2b 0 1N914
+D22 0 lcnode2b 1N914
+
+
+*RESONATOR 3 WITH GAIN AND NONLINEAR LOSS
+L3        lcnode3     0           {resl3}
+C3        lcnode3     0           {resc3}
+
+*Gain 
+* generic op-amp (in+ in- out gnd)
+Xopamp3 lcnode3  vd3  vo3  0   OpAmp
+
+* 2:1 voltage divider for 2X gain
+Rd31  vo3 vd3 {voltdivr}
+Rd32  vd3 0  {voltdivr}
+
+* positive feedback creating negative resistance
+Rfb3      vo3    lcnode3   {gainr3}
+
+* Nonlinear loss
+*resistance to ground with back-to-back Diodes
+R3 lcnode3 lcnode3b  {factor3*gainr3}
+D31 lcnode3b 0 1N914
+D32 0 lcnode3b 1N914
+
+
+*RESONATOR 4 WITH GAIN AND NONLINEAR LOSS
+L4        lcnode4     0           {resl4}
+C4        lcnode4     0           {resc4}
+
+*Gain 
+* generic op-amp (in+ in- out gnd)
+Xopamp4 lcnode4  vd4  vo4  0   OpAmp
+
+* 2:1 voltage divider for 2X gain
+Rd41  vo4 vd4 {voltdivr}
+Rd42  vd4 0  {voltdivr}
+
+* positive feedback creating negative resistance
+Rfb4      vo4    lcnode4   {gainr4}
+
+* Nonlinear loss
+*resistance to ground with back-to-back Diodes
+R4 lcnode4 lcnode4b  {factor4*gainr4}
+D41 lcnode4b 0 1N914
+D42 0 lcnode4b 1N914
+
+
+*COUPLING OF RESONATORS
+*K12     L1     L2    {mu}                  $ 1 to 2, mutual inductance
+Cc12        lcnode1     lcnode2     {ccoupl1}  $ capacitive coupling 1 & 2
+Cc23        lcnode2     lcnode3     {ccoupl2}  $ capacitive coupling 2 & 3
+Cc34        lcnode3     lcnode4     {ccoupl3}  $ capacitive coupling 3 & 4
+
+
+*--------------------------------------------------------------
+
+* Transient analysis specs
+
+*--------------------------------------------------------------
+
+.tran {timestep} {tau} uic
+
+
+
+.control
+
+    run                                $ auto run
+
+    linearize                          $ re-sample to only dt step points 
+
+    
+
+    set wr_singlescale                      $ only print out one time scale
+
+    wrdata four_gain_resonators.dat V(lcnode1),V(lcnode2),V(lcnode3),V(lcnode4)  $ write out voltage and current of the main node
+    
+    destroy all return [tref_tmp range 0 0] 	$ cleans the memory
+    quit
+.endc
+
+
+
+.END
+
+
+*-------------------------------------------------------------
+* Generic op-amp sub-circuit
+*-------------------------------------------------------------
+
+*  NODE NUMBERS
+*              IN+
+*               | IN-
+*               |  | OUT
+*               |  |  | GND
+*               |  |  |  |
+*               |  |  |  |
+*               |  |  |  |
+.SUBCKT OpAmp   1  2  3  4
+
+* hi-Z Norton source with voltage diode limit
+
+Gop    4    3    1    2    1       $ N+ N- NC+ NC- Transconductance
+*Rsh    3    4    1E5              $ may be necessary in other circuits?
+Csh    3    4    1.333n            $ may be necessary in other circuits?
+Vp     vp   4    DC  5            $ +/- 12 V power supply assumed
+Vm     vm   4    DC -5
+Dp     3    vp   Dop               $ diode like clipping
+Dm     vm   3    Dop
+
+.MODEL Dop D(IS=1E-15)            $ may be necessary in other circuits?
+
+.ends
+
+******
+
+.MODEL 1N914 D
++ IS=5.0e-09
++ RS=0.8622
++ N=2
++ ISR=9.808e-14
++ NR=2.0
++ CJO=8.68e-13
++ M=0.02504
++ VJ=0.90906
++ FC=0.5
++ TT=6.012e-9
++ BV=100
++ IBV=1e-07
++ EG=0.92
+
+******
+
+.END
+
+

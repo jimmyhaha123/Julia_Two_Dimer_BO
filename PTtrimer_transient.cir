@@ -1,0 +1,91 @@
+RLC Trimer w/ Transmission Lines
+
+*-------------------------------------------------------------
+* Parameters...
+*--------------------------------------------------------------
+
+.param pi = 3.1415926535
+*.param mu  = 0.081                  $ mutual inductance coupling
+.param eps  =0.05                      $ transmission line coupling
+.param lambda=1                         $ coupling coefficient     
+.param induc = 10u                   $ resonator inductance
+.param cap = 330p                    $ resonator capacitance
+.param effcap=cap+eps*cap             $This is the total effective capacitance in circuits 1 and 3 so that C2 is correctly defined
+.param res1 = -150          $ resonator 1 resistance (if negative: means gain)
+.param res2 = 0                    $ resonator 2 resistance (if possitive: means loss)
+.param res3 = -res1                    $ resonator 2 resistance (if possitive: means loss)
+.param natangfreq = 1/sqrt(induc*cap) $ natural angular frequency of the circuit
+.param natfreq = natangfreq/(2*pi)    $ natural frequency of circuit
+.param dt=1./(natfreq*200.)           $ time step
+.param tau=1/natfreq * 100.           $ total evolution time  
+.param Radd=250                      $ Additional resistance
+
+*====== circuit definition ======
+* leads (50 Ohm with sources)
+
+*Injecting waves from the left into resonator 1
+Vtl1    vt1    0     DC 0 SIN(0 0 {natfreq} 0 0 0)     $ source for the transient mode
+Rtl1    vt1    rt1   50
+Ctl1    rt1    lcnode1    {eps*cap}
+
+*-------------------------------------
+*Injecting waves from the center
+Vtl2    vt2    0     DC 0 SIN(0 0 {natfreq} 0 0 0)      $ source for the transient mode
+Rtl2    vt2    rt2   50
+Ctl2    rt2    lcnode2    {eps*cap}
+
+*-------------------------------------
+*Injecting waves from the right
+Vtl3    vt3    0     DC 0 SIN(0 0 {natfreq} 0 0 0)       $ source for the transient mode
+Rtl3    vt3    rt3   50
+Ctl3    rt3    lcnode3    {eps*cap}
+
+*-------------------------------------
+*RESONATOR 1 
+L1        lcnode1     0           {induc}
+C1        lcnode1     0           {cap}
+R1        lcnode1     0           {res1}
+R11        lcnode1     0           {Radd}
+
+*-------------------------------------
+*RESONATOR 2 
+L2        lcnode2     0           {induc*1.2}
+C2        lcnode2     0           {cap}
+*R2        lcnode2     0           {res2}
+R22        lcnode2     0           {Radd}
+
+*-------------------------------------
+*RESONATOR 3 
+L3        lcnode3     0           {induc}
+C3        lcnode3     0           {cap}
+R3        lcnode3     0           {res3}
+R33        lcnode3     0           {Radd}
+
+*-------------------------------------
+*COUPLING OF RESONATORS
+*K12     L1     L2    {mu}                  $ 1 to 2, mutual inductance
+*K23     L2     L3    {mu}                  $ 2 to 3, mutual inductance
+C12     lcnode1         lcnode2         {lambda*cap} 
+C23     lcnode2         lcnode3         {lambda*cap}
+C13     lcnode1         lcnode3         {lambda*cap}
+
+* Specify some initial node voltages
+.ic v(lcnode1)=0.5 v(lcnode2)=-0.7 v(lcnode3)=1.65 
+
+
+*--------------------------------------------------------------
+* Transient analysis specs
+*--------------------------------------------------------------
+.tran {dt} {tau} uic
+
+.control
+    run                                $ auto run
+    linearize                          $ re-sample to only dt step points 
+    
+    set wr_singlescale                      $ only print out one time scale
+    wrdata node_voltage_1-2-3.dat V(lcnode1) V(lcnode2) V(lcnode3)     $ write out all three osc nodes
+.endc
+
+.END
+
+

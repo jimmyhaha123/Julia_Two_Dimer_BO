@@ -1,0 +1,151 @@
+*-------------------------------------------------------------
+* Parameters...
+*--------------------------------------------------------------
+
+.param pi = 3.1415926535
+.param gainr1 = 73.66503907381308                  $ gain resonator 1 resistance
+.param gainr2 = 6980.047551864795                  $ gain resonator 2 resistance
+.param resl1 = 200.0u                    $ resonator inductance of resonator 1
+.param resc1 = 543.8022037767349p                   $ resonator capacitance of resonator 1
+.param resl2 = 200.0u                    $ resonator inductance of resonator 2
+.param resc2 = 1156.0876792090266p                   $ resonator capacitance of resonator 2
+.param lam  = 0.4027742682261706                     $ scaling of coupling capacitance
+.param factor = 0.27689905702227396                    $ factor \in [0:1] modifies the shape of the nonlinear loss
+
+.param ccoupl = {lam*resc1}            $ coupling of resonators
+.param natangfreq1 = 1/sqrt(resl1*resc1) $ natural angular frequency of the circuit
+.param natfreq1 = natangfreq1/(2*pi)    $ natural frequency of circuit
+.param timestep = 1/(200*natfreq1)     $ timestep 
+.param tau = 2000/(natfreq1)           $ total evolution time
+.param voltdivr = 550.0
+
+*-------------------------------------------------------------
+* End of parameters...
+*-------------------------------------------------------------
+
+*initial voltages
+.ic v(lcnode1)=0.5 v(lcnode2)=0
+
+*====== circuit definition ======
+*RESONATOR 1 WITH GAIN AND NONLINEAR LOSS
+L1        lcnode1     0           {resl1}
+C1        lcnode1     0           {resc1}
+
+*Gain 
+* generic op-amp (in+ in- out gnd)
+Xopamp1 lcnode1  vd  vo  0   OpAmp
+
+* 2:1 voltage divider for 2X gain
+Rd11  vo vd {voltdivr}
+Rd12  vd 0  {voltdivr}
+
+* positive feedback creating negative resistance
+Rfb1      vo    lcnode1   {gainr1}
+
+* Nonlinear loss
+*resistance to ground with back-to-back Diodes
+R1 lcnode1 lcnode1_2  {factor*gainr1}
+D11 lcnode1_2 0 1N914
+D12 0 lcnode1_2 1N914
+
+
+*RESONATOR 2 WITH LINEAR GAIN
+L2        lcnode2     0           {resl2}
+C2        lcnode2     0           {resc2}
+
+*Gain
+* generic op-amp (in+ in- out gnd)
+Xopamp2 lcnode2  vd2  vo2  0   OpAmp
+
+* 2:1 voltage divider for 2X gain
+Rd21  vo2 vd2 {voltdivr}
+Rd22  vd2 0  {voltdivr}
+
+* positive feedback creating negative resistance
+Rfb2      vo2    lcnode2   {gainr2}
+
+
+
+
+*COUPLING OF RESONATORS
+*K12     L1     L2    {mu}                  $ 1 to 2, mutual inductance
+Cc        lcnode1     lcnode2     {ccoupl}  $ capacitive coupling
+
+
+*--------------------------------------------------------------
+
+* Transient analysis specs
+
+*--------------------------------------------------------------
+
+.tran {timestep} {tau} uic
+.option post=none nomod brief
+.control
+
+    run                                $ auto run
+
+    linearize                          $ re-sample to only dt step points 
+
+    set wr_singlescale                      $ only print out one time scale
+
+    wrdata curr_volt_vs_t.dat V(lcnode1),V(lcnode2)  $ write out voltage and current of the main node
+    
+    destroy all return [tref_tmp range 0 0] 	$ cleans the memory
+
+    quit
+.endc
+
+
+
+.END
+
+
+*-------------------------------------------------------------
+* Generic op-amp sub-circuit
+*-------------------------------------------------------------
+
+*  NODE NUMBERS
+*              IN+
+*               | IN-
+*               |  | OUT
+*               |  |  | GND
+*               |  |  |  |
+*               |  |  |  |
+*               |  |  |  |
+.SUBCKT OpAmp   1  2  3  4
+
+* hi-Z Norton source with voltage diode limit
+
+Gop    4    3    1    2    1       $ N+ N- NC+ NC- Transconductance
+*Rsh    3    4    1E5              $ may be necessary in other circuits?
+Csh    3    4    1.333n            $ may be necessary in other circuits?
+Vp     vp   4    DC  5            $ +/- 12 V power supply assumed
+Vm     vm   4    DC -5
+Dp     3    vp   Dop               $ diode like clipping
+Dm     vm   3    Dop
+
+.MODEL Dop D(IS=1E-15)            $ may be necessary in other circuits?
+
+.ends
+
+******
+
+.MODEL 1N914 D
++ IS=5.0e-09
++ RS=0.8622
++ N=2
++ ISR=9.808e-14
++ NR=2.0
++ CJO=8.68e-13
++ M=0.02504
++ VJ=0.90906
++ FC=0.5
++ TT=6.012e-9
++ BV=100
++ IBV=1e-07
++ EG=0.92
+
+******
+
+.END
+
