@@ -1,6 +1,24 @@
 using DifferentialEquations, Plots, FFTW, Statistics, BayesianOptimization, GaussianProcesses, Distributions, Peaks, Interpolations, DSP
 using Base: redirect_stdout
 
+
+num = 40
+min = 0
+replication = 50
+# Augmented fft, does transform with repeated data
+function augmented_fft(x)
+    # Get the length of the original signal
+    
+    # Replicate the signal 100 times
+    x_extended = repeat(x, replication)
+    
+    # Perform FFT on the extended signal
+    X = fft(x_extended)
+    
+    # Return the full FFT result
+    return X
+
+end
 # Systen definition
 function sys!(du, u, p, t)
     # Parameters
@@ -119,7 +137,7 @@ function solve_ngspice_sys(p)
     end
 
     # Showing time series
-    start_index = Int(round(length(time_vector) * 0.6)) # Taking last 40% of signal
+    start_index = Int(round(length(time_vector) * 0.4)) # Taking last 40% of signal
     time_vector = time_vector[start_index:end]
     v1_vector = v1_vector[start_index:end]
     v2_vector = v2_vector[start_index:end]
@@ -131,13 +149,13 @@ end
 
 # Loss function
 function highest_peak_deviation(freqs, vals)
-    num = 40
+    min = num - 1
     if length(vals) < num + 1
         println("No enough peaks. ")
-        return 39
-    elseif vals[2] < 10^(-3) # First peak too small
+        return min
+    elseif vals[1] < 10^(-3) # First peak too small
         println("First peak too small. No oscillations. ")
-        return 39
+        return min
     else
         sub_peaks = vals[2:num+1]
         sub_peaks = sub_peaks / sub_peaks[1] # Normalization with respect to first peak
@@ -145,6 +163,11 @@ function highest_peak_deviation(freqs, vals)
         # println("Sucessful. Loss: " * string(cost))
         return cost
     end
+end
+
+function highest_difference(freqs, vals)
+    min = 0
+    return -vals[num] / vals[2]
 end
 
 # Takes in parameters and writes them to local ngspice file
@@ -160,12 +183,10 @@ function write_ngspice_params(filename,
     resc3 = string(p[7]) * "p"
     resc4 = string(p[8]) * "p"
     factor1 = p[9]
-    factor2 = p[10]
-    factor3 = p[11]
-    factor4 = p[12]
-    lam1 = p[13]
-    lam2 = p[14]
-    lam3 = p[15]
+    factor3 = p[10]
+    lam1 = p[11]
+    lam2 = p[12]
+    lam3 = p[13]
 
     params = """
     Two coupled RLC Dimers with realistic gain
@@ -191,10 +212,9 @@ function write_ngspice_params(filename,
     .param resl3 = 200u                    \$ resonator inductance of resonator 3
     .param resl4 = 200u                    \$ resonator inductance of resonator 4
 
-    .param factor1= $factor1                   \$ factor in [0:1] modifies the shape of the nonlinear loss in resonator 1
-    .param factor2= $factor2                    \$ factor in [0:1] modifies the shape of the nonlinear loss in resonator 2
-    .param factor3= $factor3                    \$ factor in [0:1] modifies the shape of the nonlinear loss in resonator 3
-    .param factor4= $factor4                   \$ factor in [0:1] modifies the shape of the nonlinear loss in resonator 4
+    .param factor1= $factor1                \$ factor in [0:1] modifies the shape of the nonlinear loss in resonator 1
+    .param factor3= $factor3                \$ factor in [0:1] modifies the shape of the nonlinear loss in resonator 3                  
+
 
     .param lam1  = $lam1                     \$ scaling of coupling capacitance 1
     .param lam2  = $lam2                     \$ scaling of coupling capacitance 2
@@ -254,9 +274,9 @@ function write_ngspice_params(filename,
 
     * Nonlinear loss
     *resistance to ground with back-to-back Diodes
-    R2 lcnode2 lcnode2b  {factor2*gainr2}
-    D21 lcnode2b 0 1N914
-    D22 0 lcnode2b 1N914
+    * R2 lcnode2 lcnode2b  {factor2*gainr2}
+    * D21 lcnode2b 0 1N914
+    * D22 0 lcnode2b 1N914
 
 
     *RESONATOR 3 WITH GAIN AND NONLINEAR LOSS
@@ -298,9 +318,9 @@ function write_ngspice_params(filename,
 
     * Nonlinear loss
     *resistance to ground with back-to-back Diodes
-    R4 lcnode4 lcnode4b  {factor4*gainr4}
-    D41 lcnode4b 0 1N914
-    D42 0 lcnode4b 1N914
+    * R4 lcnode4 lcnode4b  {factor4*gainr4}
+    * D41 lcnode4b 0 1N914
+    * D42 0 lcnode4b 1N914
 
 
     *COUPLING OF RESONATORS
@@ -402,7 +422,7 @@ end
 # Check repetition, returns boolean repetition and repeat index.
 function repetition_check(x, t_interp, dimensionality=8)
     first_data_point = [x[j][1] for j in 1:dimensionality]
-    epsilon = 0.01
+    epsilon = 0.02
     repeating_times = []
     repeating_indices = []
 
@@ -434,7 +454,7 @@ end
 # Extract peaks, return peaj ferquencies, 
 # sorted amplitudes, time series and transform
 function extract_peaks(mean_time_step, x_sol, t_interp, repeat_index, transform, transform_range)
-    N = length(x_sol)
+    N = length(x_sol) * replication
     dt = mean_time_step
     freqs = (0:N-1) ./ (N * dt)
     half_N = ceil(Int, N / 2)
@@ -449,9 +469,9 @@ function extract_peaks(mean_time_step, x_sol, t_interp, repeat_index, transform,
     transform_plot = plot(freqs, mag_transform, title="Fourier Transform", xlabel="Frequency", ylabel="Magnitude", xlims=transform_range, ylims=(1e-9, 1e-1), yaxis=:log)
 
     # dB scale transform plot
-    # mag_transform = 20*log10.(mag_transform ./ sorted_vals[2])
-    # yticks!(-60:20:20, string.(-60:20:20))
-    # transform_plot = plot(freqs, mag_transform, title="Fourier Transform", xlabel="Frequency", ylabel="Magnitude", xlims=transform_range, ylims=(-60, 20))
+    mag_transform = 20*log10.(mag_transform ./ sorted_vals[2])
+    yticks!(-60:20:20, string.(-60:20:20))
+    transform_plot = plot(freqs, mag_transform, title="Fourier Transform", xlabel="Frequency", ylabel="Magnitude", xlims=transform_range, ylims=(-60, 20))
 
     tseries_plot = plot(t_interp, x_sol, xlims=[t_interp[1], t_interp[end]])
     return peak_frequencies, sorted_vals, transform_plot, tseries_plot
@@ -498,11 +518,11 @@ function ngspice_objective(p, plt=false, transform_range=(0, 8e6))
             transforms = []
             for i in 1:length(x)
                 x[i] = x[i][1:repeat_index]
-                t = fft(x[i])
-                push!(transforms, t / length(x[i]))
+                t = augmented_fft(x[i])
+                push!(transforms, t / (replication*length(x[i])))
             end
         else
-            return 39
+            return num - 1
         end
 
         peak_frequencies = []
@@ -548,10 +568,8 @@ end
 function bayesian_ngspice_objective(x)
     #=
     parameter list: 
-    gainr1, gainr2, gainr3, gainr4, resc1, resc2, resc3, resc4, factor1, factor2, factor3, factor4, lam1, lam2, lam3
+    gainr1, gainr2, gainr3, gainr4, resc1, resc2, resc3, resc4, factor1, factor3, lam1, lam2, lam3
     =#
-    # Optimization variables: gainr1, gainr2, resc1, resc2, lam, factor
-    # x[1] = gainr1, x[2] = gainr2, x[3] = resc1, x[4] = resc2, x[5] = lam, x[6] = factor
     p = x
     println("Current: " * string(p))
     flush(stdout)
@@ -565,7 +583,7 @@ function opt(num_its)
     lower_bound = [0.9, 0.9, 0.8, 1, -0.7, 0.9, 0.4, -0.7, 1.2, 0, 0.4, 0]
     upper_bound = [1.1, 1.1, 1, 1.2, -0.5, 1.1, 0.6, -0.5, 1.4, 0.2, 0.6, 0.2]
     input_dim = length(lower_bound)
-    model = ElasticGPE(input_dim, mean=MeanConst(0.0), kernel=SEArd(zeros(input_dim), 5.0), logNoise=0.0, capacity=3000)
+    model = ElasticGPE(input_dim, mean=MeanConst(0), kernel=SEArd(zeros(input_dim), 5.0), logNoise=0.0, capacity=3000)
     set_priors!(model.mean, [Normal(1, 2)])
     vec1 = vcat(zeros(input_dim) .- 1.0, [0.0])
     vec2 = vcat(zeros(input_dim) .+ 4.0, [10.0])
@@ -596,23 +614,22 @@ function ngspice_opt(num_its)
     parameter list: 
     gainr1, gainr2, gainr3, gainr4, resc1, resc2, resc3, resc4, factor1, factor2, factor3, factor4, lam1, lam2, lam3
     =#
-    lower_bound = [5, 5, 5, 5, 700, 700, 700, 700, 0.1, 0.1, 0.1, 0.1, 0.05, 0.05, 0.05]
-    upper_bound = [10000, 10000, 10000, 10000, 1400, 1400, 1400, 1400, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5]
+    lower_bound = [5, 5, 5, 5, 900, 900, 900, 900, 0.1, 0.1, 0.05, 0.05, 0.05]
+    upper_bound = [9000, 9000, 9000, 9000, 1100, 1100, 1100, 1100, 0.5, 0.5, 0.5, 0.5, 0.5]
     input_dim = length(lower_bound)
-    model = ElasticGPE(input_dim, mean=MeanConst(0.0), kernel=SEArd(zeros(input_dim), 5.0), logNoise=-Inf, capacity=3000)
+    model = ElasticGPE(input_dim, mean=MeanConst(38.0), kernel=SEArd(zeros(input_dim), 5.0), logNoise=-Inf, capacity=3000)
     set_priors!(model.mean, [Normal(1, 2)])
     vec1 = vcat(zeros(input_dim) .- 1.0, [0.0])
     vec2 = vcat(zeros(input_dim) .+ 4.0, [10.0])
     modeloptimizer = MAPGPOptimizer(
-        every=2,
+        every=5,
         noisebounds=nothing,
         kernbounds=[vec1, vec2],
-        # GaussianProcesses.get_param_names(model.kernel),
         maxeval=200)
 
     opt = BOpt(
         bayesian_ngspice_objective, model,
-        ProbabilityOfImprovement(),
+        ExpectedImprovement(),
         modeloptimizer,
         lower_bound,
         upper_bound,
@@ -631,8 +648,8 @@ function ngspice_opt_warm(num_its)
     parameter list: gainr1, gainr2, resl1, resc1, resl2, resc2, lam, factor, voltdivr
     =#
     # x[1] = gainr1, x[2] = gainr2, x[3] = resc1, x[4] = resc2, x[5] = lam, x[6] = factor
-    lower_bound = [5, 5, 5, 5, 700, 700, 700, 700, 0.1, 0.1, 0.1, 0.1, 0.05, 0.05, 0.05]
-    upper_bound = [10000, 10000, 10000, 10000, 1400, 1400, 1400, 1400, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5]
+    lower_bound = [5, 5, 5, 5, 700, 700, 700, 700, 0.1, 0.1, 0.05, 0.05, 0.05]
+    upper_bound = [10000, 10000, 10000, 10000, 1400, 1400, 1400, 1400, 0.5, 0.5, 0.5, 0.5, 0.5]
     input_dim = length(lower_bound)
     model = ElasticGPE(input_dim, mean=MeanConst(0.0), kernel=SEArd(zeros(input_dim), 5.0), logNoise=0.0, capacity=3000)
     set_priors!(model.mean, [Normal(1, 2)])

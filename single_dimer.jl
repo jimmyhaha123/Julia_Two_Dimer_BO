@@ -364,9 +364,9 @@ function extract_peaks(mean_time_step, x_sol, t_interp, repeat_index, transform,
     transform_plot = plot(freqs, mag_transform, title="Fourier Transform", xlabel="Frequency", ylabel="Magnitude", xlims=transform_range, ylims=(1e-9, 1e-1), yaxis=:log)
 
     # dB scale transform plot
-    # mag_transform = 20*log10.(mag_transform ./ sorted_vals[2])
-    # yticks!(-60:20:20, string.(-60:20:20))
-    # transform_plot = plot(freqs, mag_transform, title="Fourier Transform", xlabel="Frequency", ylabel="Magnitude", xlims=transform_range, ylims=(-60, 20))
+    mag_transform = 20*log10.(mag_transform ./ sorted_vals[2])
+    yticks!(-60:20:20, string.(-60:20:20))
+    transform_plot = plot(freqs, mag_transform, title="Fourier Transform", xlabel="Frequency", ylabel="Magnitude", xlims=transform_range, ylims=(-60, 20))
 
     tseries_plot = plot(t_interp, x_sol, xlims=[0.003, 0.0035])
     return peak_frequencies, sorted_vals, transform_plot, tseries_plot

@@ -6,29 +6,28 @@ Two coupled RLC Dimers with realistic gain
 
 .param pi = 3.1415926535
 
-.param gainr1 = 852.6736705514713                  $ gain resonator 1 resistance
-.param gainr2 = 1329.0711891054173                  $ gain resonator 2 resistance
-.param gainr3 = 2258.871080572179                  $ gain resonator 3 resistance
-.param gainr4 = 5353.046523843004                  $ gain resonator 4 resistance
+.param gainr1 = 508.6685255479232                  $ gain resonator 1 resistance
+.param gainr2 = 7592.135581428374                  $ gain resonator 2 resistance
+.param gainr3 = 8447.544657310946                  $ gain resonator 3 resistance
+.param gainr4 = 3529.2783110524083                  $ gain resonator 4 resistance
 
-.param resc1 = 789.4769527719492p                   $ resonator capacitance of resonator 1
-.param resc2 = 839.4466035613801p                   $ resonator capacitance of resonator 2
-.param resc3 = 1184.136675318708p                   $ resonator capacitance of resonator 3
-.param resc4 = 832.1911463238p                   $ resonator capacitance of resonator 4
+.param resc1 = 928.3859417211684p                   $ resonator capacitance of resonator 1
+.param resc2 = 1098.9326275776086p                   $ resonator capacitance of resonator 2
+.param resc3 = 1038.7280807881261p                   $ resonator capacitance of resonator 3
+.param resc4 = 1031.0471117294192p                   $ resonator capacitance of resonator 4
 
 .param resl1 = 200u                    $ resonator inductance of resonator 1
 .param resl2 = 200u                    $ resonator inductance of resonator 2
 .param resl3 = 200u                    $ resonator inductance of resonator 3
 .param resl4 = 200u                    $ resonator inductance of resonator 4
 
-.param factor1= 0.48847719931004796                   $ factor in [0:1] modifies the shape of the nonlinear loss in resonator 1
-.param factor2= 0.14650655761070466                    $ factor in [0:1] modifies the shape of the nonlinear loss in resonator 2
-.param factor3= 0.2971760195887082                    $ factor in [0:1] modifies the shape of the nonlinear loss in resonator 3
-.param factor4= 0.15902243181628042                   $ factor in [0:1] modifies the shape of the nonlinear loss in resonator 4
+.param factor1= 0.1484269412158724                $ factor in [0:1] modifies the shape of the nonlinear loss in resonator 1
+.param factor3= 0.36031115810669656                $ factor in [0:1] modifies the shape of the nonlinear loss in resonator 3                  
 
-.param lam1  = 0.40938412241891464                     $ scaling of coupling capacitance 1
-.param lam2  = 0.05910674757541228                     $ scaling of coupling capacitance 2
-.param lam3  = 0.4823884625128188                     $ scaling of coupling capacitance 3
+
+.param lam1  = 0.20206184312479658                     $ scaling of coupling capacitance 1
+.param lam2  = 0.18238908344117744                     $ scaling of coupling capacitance 2
+.param lam3  = 0.16668251131311979                     $ scaling of coupling capacitance 3
 
 .param ccoupl1 = {lam1*resc1}            $ coupling of resonators 1 & 2
 .param ccoupl2 = {lam2*resc1}            $ coupling of resonators 2 & 3
@@ -84,9 +83,9 @@ Rfb2      vo2    lcnode2   {gainr2}
 
 * Nonlinear loss
 *resistance to ground with back-to-back Diodes
-R2 lcnode2 lcnode2b  {factor2*gainr2}
-D21 lcnode2b 0 1N914
-D22 0 lcnode2b 1N914
+* R2 lcnode2 lcnode2b  {factor2*gainr2}
+* D21 lcnode2b 0 1N914
+* D22 0 lcnode2b 1N914
 
 
 *RESONATOR 3 WITH GAIN AND NONLINEAR LOSS
@@ -128,9 +127,9 @@ Rfb4      vo4    lcnode4   {gainr4}
 
 * Nonlinear loss
 *resistance to ground with back-to-back Diodes
-R4 lcnode4 lcnode4b  {factor4*gainr4}
-D41 lcnode4b 0 1N914
-D42 0 lcnode4b 1N914
+* R4 lcnode4 lcnode4b  {factor4*gainr4}
+* D41 lcnode4b 0 1N914
+* D42 0 lcnode4b 1N914
 
 
 *COUPLING OF RESONATORS
