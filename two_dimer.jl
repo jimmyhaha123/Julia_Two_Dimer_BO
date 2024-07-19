@@ -469,9 +469,9 @@ function extract_peaks(mean_time_step, x_sol, t_interp, repeat_index, transform,
     transform_plot = plot(freqs, mag_transform, title="Fourier Transform", xlabel="Frequency", ylabel="Magnitude", xlims=transform_range, ylims=(1e-9, 1e-1), yaxis=:log)
 
     # dB scale transform plot
-    mag_transform = 20*log10.(mag_transform ./ sorted_vals[2])
-    yticks!(-60:20:20, string.(-60:20:20))
-    transform_plot = plot(freqs, mag_transform, title="Fourier Transform", xlabel="Frequency", ylabel="Magnitude", xlims=transform_range, ylims=(-60, 20))
+    # mag_transform = 20*log10.(mag_transform ./ sorted_vals[2])
+    # yticks!(-60:20:20, string.(-60:20:20))
+    # transform_plot = plot(freqs, mag_transform, title="Fourier Transform", xlabel="Frequency", ylabel="Magnitude", xlims=transform_range, ylims=(-60, 20))
 
     tseries_plot = plot(t_interp, x_sol, xlims=[t_interp[1], t_interp[end]])
     return peak_frequencies, sorted_vals, transform_plot, tseries_plot
@@ -479,7 +479,7 @@ end
 
 # Takes in parameters, generate loss, transform plot, and time series plot
 function objective(p, plt=false, transform_range=(0, 2.5))
-    try
+    # try
         # Solve system
         x, t_interp, mean_time_step = solve_sys(p)
         # Repetition check        
@@ -487,7 +487,7 @@ function objective(p, plt=false, transform_range=(0, 2.5))
 
         if repetition == true
             x_sol = x[3][1:repeat_index]
-            transform = fft(x_sol)
+            transform = augmented_fft(x_sol)
             transform = transform / length(x_sol)
         else
             return 10 ^ 5
@@ -499,10 +499,10 @@ function objective(p, plt=false, transform_range=(0, 2.5))
         else
             return highest_peak_deviation(peak_frequencies, sorted_vals), transform_plot, tseries_plot
         end
-    catch e
-        println("Error in ode: ", e)
-        return 10^5
-    end
+    # catch e
+    #     println("Error in ode: ", e)
+    #     return 10^5
+    # end
 end
 
 # Takes in parameters, generate loss, transform plot, time series plot, and min index.
@@ -663,7 +663,7 @@ function ngspice_opt_warm(num_its)
         maxeval=40)
 
     # Initialization
-    x = [2558.1289964133903, 300.8503311528617, 1062.1334079118446, 6714.257939996455, 1252.5596186687374, 907.6616684318678, 1307.9963447178025, 1108.9921979803999, 0.2477040282026825, 0.2557195954162186, 0.495833133390885, 0.2603890933757893, 0.12519318530321832, 0.17070609736856535, 0.3390549484811537]
+    x = [240.21139646536434, 4867.878914881704, 8384.997250983319, 3108.0357327590455, 962.7116953317021, 1019.2521932376139, 1043.057313471482, 1003.4438974287144, 0.11616358235169735, 0.11402636375999353, 0.4568645360330499, 0.18172062172218917, 0.1946088045238457]
     y = -bayesian_ngspice_objective(x)
     append!(model, reshape(x, :, 1), [y]) 
 
@@ -676,7 +676,7 @@ function ngspice_opt_warm(num_its)
         repetitions=1,
         maxiterations=num_its,
         sense=Min,
-        initializer_iterations = 0,
+        initializer_iterations = 20,
         acquisitionoptions=(method=:LD_LBFGS, restarts=5, maxtime=0.1, maxeval=1000),
         verbosity=Progress)
     result = boptimize!(opt)
