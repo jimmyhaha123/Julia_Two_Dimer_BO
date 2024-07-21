@@ -1,6 +1,6 @@
 # import Pkg; Pkg.add("DifferentialEquations"); Pkg.add("Plots"); Pkg.add("FFTW"); Pkg.add("Statistics"); Pkg.add("BayesianOptimization");
 # Pkg.add("GaussianProcesses"); Pkg.add("Distributions"); Pkg.add("Peaks"); Pkg.add("Interpolations");Pkg.add("DSP");
-import Pkg; Pkg.add("BenchmarkTools")
+# import Pkg; Pkg.add("BenchmarkTools")
 using DifferentialEquations, Plots, FFTW, Statistics, BayesianOptimization, GaussianProcesses, Distributions, Peaks, Interpolations, DSP
 using Base: redirect_stdout
 using BenchmarkTools
@@ -189,6 +189,7 @@ end
 # loss, f, transform = objective(p)
 # print(loss)
 # plot(f, transform, xlims=(0.2, 0.4))
+
 p = [-0.5, 2.88, 0.1, 1]
 benchmark = @benchmark objective($p)
 avg_time = mean(benchmark.times) / 1e9  # Convert nanoseconds to seconds
