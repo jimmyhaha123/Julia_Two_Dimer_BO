@@ -2,14 +2,13 @@ import numpy as np
 from scipy.integrate import solve_ivp
 from scipy.interpolate import interp1d
 import matplotlib.pyplot as plt
-import matplotlib.pyplot as plt
 from scipy.signal import find_peaks
 from scipy.optimize import fsolve
 from scipy.linalg import eig
 from autograd import jacobian
 import autograd.numpy as anp
 
-replication = 100
+replication = 1
 def augmented_fft(x):
     # Replicate the signal 100 times
     x_extended = np.tile(x, replication)
@@ -32,7 +31,7 @@ def highest_peak_deviation(freqs, vals, num=40):
         sub_peaks = vals[1:num+1]
         sub_peaks = sub_peaks / sub_peaks[0]  # Normalization with respect to first peak
         cost = np.sum(np.abs(sub_peaks - 1))
-        print(f"Successful. Loss: {cost}")
+        print(f"Successful")
         return cost
 
 
@@ -139,7 +138,7 @@ def loss(p):
         t_new = t_new[repeat_index:]
         u_new = u_new[:, repeat_index:]
     else:
-        return 39
+        return [39] * len(u_new), [], []
     
     
     mean_time_step = t_new[1] - t_new[0]
@@ -149,6 +148,8 @@ def loss(p):
     peak_frequencies = []
     sorted_vals = []
     losses = []
+    # u_new[0].real = np.sin(t_new)
+    # u_new[1].real = np.sin(t_new)
     for i in range(num_res):
         x.append(u_new[i].real)
         temp = augmented_fft(u_new[i].real)
@@ -184,7 +185,7 @@ def extract_peaks(mean_time_step, x_sol, transform):
 
 def repetition_check(x, t_interp, dimensionality=8):
     first_data_point = [x[j][0] for j in range(dimensionality)]
-    epsilon = 0.01
+    epsilon = 0.02
     repeating_times = []
     repeating_indices = []
 
@@ -197,7 +198,7 @@ def repetition_check(x, t_interp, dimensionality=8):
     repeat_index = -1
     repetition = False
 
-    if repeating_indices and repeating_indices[-1] > 5000:
+    if repeating_indices and repeating_indices[-1] > 10000:
         repeat_index = repeating_indices[-1]
         print("Repetition found.")
         repetition = True
@@ -211,35 +212,36 @@ def repetition_check(x, t_interp, dimensionality=8):
     return repetition, repeat_index
 
 p = [-0.5, 2.88, 0.2, 1]
-fixed_points_with_eigenvalues = jacobian_eig(p)
-fp, eigs = fixed_points_with_eigenvalues[0]
-print("Max eigenvalue: " + str(max(eigs.real)))
+# Plotting code
+# fixed_points_with_eigenvalues = jacobian_eig(p)
+# fp, eigs = fixed_points_with_eigenvalues[0]
+# print("Max eigenvalue: " + str(max(eigs.real)))
+# l, freqs, transforms = loss(p)
+# transform = transforms[0]
+# transform = abs(transform) ** 2
+# transform = transform[:int(np.ceil(len(transform) / 2))]
+# plt.plot(freqs, transform)
+# # plt.yscale('log')
+# plt.show()
 
-l, freqs, transforms = loss(p)
-transform = transforms[0]
-transform = abs(transform) ** 2
-transform = transform[:int(np.ceil(len(transform) / 2))]
-plt.plot(freqs, transform)
-plt.yscale('log')
-plt.show()
 
 
-
-n20_range = np.linspace(0.1, 0.35, 20)
+n20_range = np.linspace(0.26, 0.34, 20)
 losses = []
 eiganvalues = []
 counter = 0
 
-# for n20 in n20_range:
-#     counter += 1
-#     print("Iteration: " + str(counter))
-#     p[2] = n20
-#     l, _, _ = loss(p)
-#     losses.append(l[0])
-#     fixed_points_with_eigenvalues = jacobian_eig(p)
-#     fp, eigs = fixed_points_with_eigenvalues[0]
-#     print(max(eigs.real))
-#     eiganvalues.append(max(eigs.real))
+for n20 in n20_range:
+    counter += 1
+    print("Iteration: " + str(counter))
+    p[2] = n20
+    l, _, _ = loss(p)
+    losses.append(l[0])
+    fixed_points_with_eigenvalues = jacobian_eig(p)
+    fp, eigs = fixed_points_with_eigenvalues[0]
+    print("Max eigenvalue: " + str(max(eigs.real)))
+    print("Loss: " + str(l[0]))
+    eiganvalues.append(max(eigs.real))
 
 
 
