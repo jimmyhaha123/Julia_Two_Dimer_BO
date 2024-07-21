@@ -171,12 +171,9 @@ function objective(p, plt=false, transform_range=(0, 2.5))
             return 39, [], []
         end
 
-        peak_frequencies, sorted_vals, ferqs, transform = extract_peaks(mean_time_step, x_sol, t_interp, repeat_index, transform, transform_range)
-        if !plt
-            return highest_peak_deviation(peak_frequencies, sorted_vals), [], []
-        else
-            return highest_peak_deviation(peak_frequencies, sorted_vals), freqs, transform
-        end
+        peak_frequencies, sorted_vals, freqs, transform = extract_peaks(mean_time_step, x_sol, t_interp, repeat_index, transform, transform_range)
+
+        return highest_peak_deviation(peak_frequencies, sorted_vals), freqs, transform
     # catch e
     #     println("Error in ode: ", e)
     #     return 10^5
@@ -190,4 +187,4 @@ end
 p = [-0.5, 2.88, 0.1, 1]
 loss, f, transform = objective(p)
 print(loss)
-plot(f, transform)
+plot(f, transform, xlims=(0.2, 0.4))

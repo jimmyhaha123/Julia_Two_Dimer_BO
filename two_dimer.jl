@@ -4,7 +4,7 @@ using Base: redirect_stdout
 
 num = 40
 min = 0
-replication = 50
+replication = 1
 # Augmented fft, does transform with repeated data
 function augmented_fft(x)
     # Get the length of the original signal
@@ -60,7 +60,7 @@ function solve_sys(p)
     index = ceil(Int, length(sol) / 2)
     sol = sol[index:end]
     time_points = sol.t
-    # println("Solving finished.")
+    println("Solving finished.")
 
     mean_time_step = 0.005
     t_start, t_end = time_points[1], time_points[end]
