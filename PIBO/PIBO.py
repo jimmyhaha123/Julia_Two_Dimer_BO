@@ -24,7 +24,7 @@ def highest_peak_deviation(freqs, vals, num=40):
     if len(vals) < num + 1:
         print("Not enough peaks.")
         return num - 1
-    elif vals[0] < 10**(-3):  # First peak too small
+    elif vals[1] < 10**(-3):  # First peak too small
         print("First peak too small. No oscillations.")
         return num - 1
     else:
@@ -198,7 +198,7 @@ def repetition_check(x, t_interp, dimensionality=8):
     repeat_index = -1
     repetition = False
 
-    if repeating_indices and repeating_indices[-1] > 10000:
+    if repeating_indices and repeating_indices[-1] > 5000:
         repeat_index = repeating_indices[-1]
         print("Repetition found.")
         repetition = True

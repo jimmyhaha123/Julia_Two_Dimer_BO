@@ -1,12 +1,13 @@
 # import Pkg; Pkg.add("DifferentialEquations"); Pkg.add("Plots"); Pkg.add("FFTW"); Pkg.add("Statistics"); Pkg.add("BayesianOptimization");
 # Pkg.add("GaussianProcesses"); Pkg.add("Distributions"); Pkg.add("Peaks"); Pkg.add("Interpolations");Pkg.add("DSP");
-
+import Pkg; Pkg.add("BenchmarkTools")
 using DifferentialEquations, Plots, FFTW, Statistics, BayesianOptimization, GaussianProcesses, Distributions, Peaks, Interpolations, DSP
 using Base: redirect_stdout
+using BenchmarkTools
 
 num = 40
 min = 0
-replication = 50
+replication = 1
 
 
 function highest_peak_deviation(freqs, vals)
@@ -15,7 +16,7 @@ function highest_peak_deviation(freqs, vals)
         println("No enough peaks. ")
         return num - 1
     elseif vals[2] < 10^(-3) # First peak too small
-        println("First peak too small. No oscillations. ")
+        println("Second peak too small.")
         return num - 1
     else
         sub_peaks = vals[2:num+1]
@@ -184,7 +185,11 @@ function isclose(point1, point2, eps)
     return all(abs.(point1 - point2) .< eps)
 end
 
+# p = [-0.5, 2.88, 0.1, 1]
+# loss, f, transform = objective(p)
+# print(loss)
+# plot(f, transform, xlims=(0.2, 0.4))
 p = [-0.5, 2.88, 0.1, 1]
-loss, f, transform = objective(p)
-print(loss)
-plot(f, transform, xlims=(0.2, 0.4))
+benchmark = @benchmark objective($p)
+avg_time = mean(benchmark.times) / 1e9  # Convert nanoseconds to seconds
+println("Average execution time: $(avg_time) seconds")
