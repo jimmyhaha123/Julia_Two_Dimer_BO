@@ -1,7 +1,7 @@
 # import Pkg; Pkg.add("DifferentialEquations"); Pkg.add("Plots"); Pkg.add("FFTW"); Pkg.add("Statistics"); Pkg.add("BayesianOptimization");
-# Pkg.add("GaussianProcesses"); Pkg.add("Distributions"); Pkg.add("Peaks"); Pkg.add("Interpolations");Pkg.add("DSP");
+# Pkg.add("GaussianProcesses"); Pkg.add("Distributions"); Pkg.add("Peaks"); Pkg.add("Interpolations");Pkg.add("DSP");Pkg.add("ForwardDiff")
 # import Pkg; Pkg.add("BenchmarkTools")
-using DifferentialEquations, Plots, FFTW, Statistics, BayesianOptimization, GaussianProcesses, Distributions, Peaks, Interpolations, DSP
+using DifferentialEquations, Plots, FFTW, Statistics, BayesianOptimization, GaussianProcesses, Distributions, Peaks, Interpolations, DSP, LinearAlgebra, ForwardDiff
 using Base: redirect_stdout
 using BenchmarkTools
 
@@ -70,7 +70,7 @@ function solve_sys(p)
     sol = solve(prob, abstol=abstol, reltol=reltol)
 
     u0 = sol.u[end]
-    tspan = (0, 10000)
+    tspan = (0, 20000)
     prob = ODEProblem(sys!, u0, tspan, p)
     abstol = 1e-10
     reltol = 1e-8
@@ -87,14 +87,16 @@ function solve_sys(p)
     x_sol_2 = [imag.(u[1]) for u in sol.u]
     x_sol_3 = [real.(u[2]) for u in sol.u]
     x_sol_4 = [imag.(u[2]) for u in sol.u]
-    interp_func_1 = linear_interpolation(time_points, x_sol_1)
-    interp_func_2 = linear_interpolation(time_points, x_sol_2)
-    interp_func_3 = linear_interpolation(time_points, x_sol_3)
-    interp_func_4 = linear_interpolation(time_points, x_sol_4)
-    x_sol_1 = [interp_func_1(t) for t in t_interp]
-    x_sol_2 = [interp_func_2(t) for t in t_interp]
-    x_sol_3 = [interp_func_3(t) for t in t_interp]
-    x_sol_4 = [interp_func_4(t) for t in t_interp]
+    if length(x_sol_1) > 100
+        interp_func_1 = linear_interpolation(time_points, x_sol_1)
+        interp_func_2 = linear_interpolation(time_points, x_sol_2)
+        interp_func_3 = linear_interpolation(time_points, x_sol_3)
+        interp_func_4 = linear_interpolation(time_points, x_sol_4)
+        x_sol_1 = [interp_func_1(t) for t in t_interp]
+        x_sol_2 = [interp_func_2(t) for t in t_interp]
+        x_sol_3 = [interp_func_3(t) for t in t_interp]
+        x_sol_4 = [interp_func_4(t) for t in t_interp]
+    end
     x = [x_sol_1, x_sol_2, x_sol_3, x_sol_4]
     return x, t_interp, mean_time_step
 end
@@ -102,7 +104,7 @@ end
 
 function repetition_check(x, t_interp, dimensionality=8)
     first_data_point = [x[j][1] for j in 1:dimensionality]
-    epsilon = 0.02
+    epsilon = 0.04
     repeating_times = []
     repeating_indices = []
 
@@ -115,7 +117,7 @@ function repetition_check(x, t_interp, dimensionality=8)
     end
 
     repeat_index = -1
-    if (repeating_indices[end] > 2000)
+    if (repeating_indices[end] > 5000)
         repeat_index = repeating_indices[end]
         println("Repetition found.")
         repetition = true
@@ -161,6 +163,9 @@ function objective(p, plt=false, transform_range=(0, 2.5))
     # try
         # Solve system
         x, t_interp, mean_time_step = solve_sys(p)
+        if length(x[1]) < 100
+            return 39, [], []
+        end
         # Repetition check
         repetition, repeat_index = repetition_check(x, t_interp, 4)
 
@@ -185,12 +190,64 @@ function isclose(point1, point2, eps)
     return all(abs.(point1 - point2) .< eps)
 end
 
-# p = [-0.5, 2.88, 0.1, 1]
+function jacobian_eig(p)
+    n11, n10, n20, w2 = p
+
+    # Define the time derivatives
+    function time_derivatives(vars)
+        I1, I2, theta = vars
+        dI1dt = 2*n11*(I1^2) + 2*n10*I1 + 2*sqrt(I1*I2)*sin(theta)
+        dI2dt = 2*n20*I2 - 2*sqrt(I1*I2)*sin(theta)
+        dthetadt = (sqrt(I2/I1) - sqrt(I1/I2)) * cos(theta)
+        return [dI1dt, dI2dt, dthetadt]
+    end
+
+    # Analytical fixed points
+    I1 = I2 = -(n10 + n20) / n11
+    theta = asin(n20)
+
+    # Ensure I1 and I2 are positive and real
+    if I1 <= 0 || I2 <= 0 || !isreal(theta)
+        return []
+    end
+
+    fixed_point = [I1, I2, theta]
+
+    # Compute the Jacobian matrix at the fixed point
+    J_func = function (vars)
+        ForwardDiff.jacobian(time_derivatives, vars)
+    end
+
+    J = J_func(fixed_point)
+
+    # Calculate the eigenvalues of the Jacobian matrix
+    eigenvalues = eigen(J).values
+
+    return eigenvalues
+end
+
+p = [-0.5, 2.88, 0.1, 1]
 # loss, f, transform = objective(p)
 # print(loss)
 # plot(f, transform, xlims=(0.2, 0.4))
 
-p = [-0.5, 2.88, 0.1, 1]
-benchmark = @benchmark objective($p)
-avg_time = mean(benchmark.times) / 1e9  # Convert nanoseconds to seconds
-println("Average execution time: $(avg_time) seconds")
+# n20_range = LinRange(0.27, 0.5, 200)
+# losses = []
+# eigs = []
+
+# for i in 1:length(n20_range)
+#     println("Iteration: " * string(i))
+#     p[3] = n20_range[i]
+#     loss, _, _ = objective(p)
+#     eigenvlaues = jacobian_eig(p)
+#     println("Eigenvalue: " * string(maximum(real.(eigenvlaues))))
+#     println("Loss: " * string(loss))
+#     push!(losses, loss)
+#     push!(eigs, maximum(real.(eigenvlaues)))
+# end
+
+# plot(n20_range, losses, label="Losses", xlabel="n20", ylabel="Losses", color=:blue, legend=:topright)
+# plot!(twinx(), n20_range, eigs, label="Eigenvalues", ylabel="Eigenvalues", color=:red, legend=:right)
+
+
+
