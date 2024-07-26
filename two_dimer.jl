@@ -1,10 +1,10 @@
-using DifferentialEquations, Plots, FFTW, Statistics, BayesianOptimization, GaussianProcesses, Distributions, Peaks, Interpolations, DSP
+using DifferentialEquations, FFTW, Statistics, BayesianOptimization, GaussianProcesses, Distributions, Peaks, Interpolations, DSP
 using Base: redirect_stdout
 
 
 num = 40
 min = 0
-replication = 1
+replication = 50
 # Augmented fft, does transform with repeated data
 function augmented_fft(x)
     # Get the length of the original signal
@@ -58,21 +58,22 @@ function solve_sys(p)
     reltol = 1e-8
     sol = solve(prob, abstol=abstol, reltol=reltol)
     index = ceil(Int, length(sol) / 2)
-    sol = sol[index:end]
-    time_points = sol.t
+    sol_t = sol.t[index:end]
+    sol_u = sol.u[index:end]
+    time_points = sol_t
     println("Solving finished.")
 
     mean_time_step = 0.005
     t_start, t_end = time_points[1], time_points[end]
     t_interp = t_start:mean_time_step:t_end
-    x_sol_1 = [real.(u[1]) for u in sol.u]
-    x_sol_2 = [imag.(u[1]) for u in sol.u]
-    x_sol_3 = [real.(u[2]) for u in sol.u]
-    x_sol_4 = [imag.(u[2]) for u in sol.u]
-    x_sol_5 = [real.(u[3]) for u in sol.u]
-    x_sol_6 = [imag.(u[3]) for u in sol.u]
-    x_sol_7 = [real.(u[4]) for u in sol.u]
-    x_sol_8 = [imag.(u[4]) for u in sol.u]
+    x_sol_1 = [real.(u[1]) for u in sol_u]
+    x_sol_2 = [imag.(u[1]) for u in sol_u]
+    x_sol_3 = [real.(u[2]) for u in sol_u]
+    x_sol_4 = [imag.(u[2]) for u in sol_u]
+    x_sol_5 = [real.(u[3]) for u in sol_u]
+    x_sol_6 = [imag.(u[3]) for u in sol_u]
+    x_sol_7 = [real.(u[4]) for u in sol_u]
+    x_sol_8 = [imag.(u[4]) for u in sol_u]
     interp_func_1 = LinearInterpolation(time_points, x_sol_1)
     interp_func_2 = LinearInterpolation(time_points, x_sol_2)
     interp_func_3 = LinearInterpolation(time_points, x_sol_3)
@@ -102,7 +103,7 @@ function solve_ngspice_sys(p)
     write_ngspice_params("four_gain_resonators.cir", p)
 
     # Define the path to the circuit file
-    circuit_file = "/Users/jimmy/Desktop/Jimmy/WTICS/two_dimer/four_gain_resonators.cir"
+    circuit_file = "four_gain_resonators.cir"
 
     # Use mktemp to create a temporary file and redirect stdout to it
     str = mktemp() do path, io
@@ -122,7 +123,7 @@ function solve_ngspice_sys(p)
     v4_vector = Float64[]
 
     # Read the file line by line
-    file_path = "/Users/jimmy/Desktop/Jimmy/WTICS/two_dimer/four_gain_resonators.dat"
+    file_path = "./four_gain_resonators.dat"
     open(file_path, "r") do file
         for line in eachline(file)
             split_line = split(line)
@@ -153,8 +154,8 @@ function highest_peak_deviation(freqs, vals)
     if length(vals) < num + 1
         println("No enough peaks. ")
         return min
-    elseif vals[1] < 10^(-3) # First peak too small
-        println("First peak too small. No oscillations. ")
+    elseif vals[2] < 10^(-3) # First peak too small
+        println("Second peak too small. No oscillations. ")
         return min
     else
         sub_peaks = vals[2:num+1]
@@ -227,7 +228,7 @@ function write_ngspice_params(filename,
     .param natangfreq = 1/sqrt(resl1*resc1) \$ natural angular frequency of the circuit
     .param natfreq = natangfreq/(2*pi)    \$ natural frequency of circuit
     .param timestep = 1/(200*natfreq)     \$ timestep 
-    .param tau = 2000/(natfreq)           \$ total evolution time
+    .param tau = 3 * 2000/(natfreq)           \$ total evolution time
     .param voltdivr = 550
 
 
@@ -422,7 +423,7 @@ end
 # Check repetition, returns boolean repetition and repeat index.
 function repetition_check(x, t_interp, dimensionality=8)
     first_data_point = [x[j][1] for j in 1:dimensionality]
-    epsilon = 0.02
+    epsilon = 0.05
     repeating_times = []
     repeating_indices = []
 
@@ -435,7 +436,7 @@ function repetition_check(x, t_interp, dimensionality=8)
     end
 
     repeat_index = -1
-    if (repeating_indices[end] > 20000)
+    if (repeating_indices[end] > 50000)
         repeat_index = repeating_indices[end]
         println("Repetition found.")
         repetition = true
@@ -466,15 +467,15 @@ function extract_peaks(mean_time_step, x_sol, t_interp, repeat_index, transform,
     sorted_pks = pks[sorted_indices]
     sorted_vals = vals[sorted_indices] # Magnitude of peaks
     peak_frequencies = freqs[sorted_pks] # Frequency of peaks
-    transform_plot = plot(freqs, mag_transform, title="Fourier Transform", xlabel="Frequency", ylabel="Magnitude", xlims=transform_range, ylims=(1e-9, 1e-1), yaxis=:log)
+    # transform_plot = plot(freqs, mag_transform, title="Fourier Transform", xlabel="Frequency", ylabel="Magnitude", xlims=transform_range, ylims=(1e-9, 1e-1), yaxis=:log)
 
     # dB scale transform plot
     # mag_transform = 20*log10.(mag_transform ./ sorted_vals[2])
     # yticks!(-60:20:20, string.(-60:20:20))
     # transform_plot = plot(freqs, mag_transform, title="Fourier Transform", xlabel="Frequency", ylabel="Magnitude", xlims=transform_range, ylims=(-60, 20))
 
-    tseries_plot = plot(t_interp, x_sol, xlims=[t_interp[1], t_interp[end]])
-    return peak_frequencies, sorted_vals, transform_plot, tseries_plot
+    # tseries_plot = plot(t_interp, x_sol, xlims=[t_interp[1], t_interp[end]])
+    return peak_frequencies, sorted_vals, mag_transform, freqs, x_sol
 end
 
 # Takes in parameters, generate loss, transform plot, and time series plot
@@ -486,18 +487,22 @@ function objective(p, plt=false, transform_range=(0, 2.5))
         repetition, repeat_index = repetition_check(x, t_interp)
 
         if repetition == true
-            x_sol = x[3][1:repeat_index]
+            x_sol = x[1][1:repeat_index]
             transform = augmented_fft(x_sol)
-            transform = transform / length(x_sol)
+            transform = transform / (replication * length(x_sol))
         else
-            return 10 ^ 5
+            return 10 ^ 5, [], [], x, t_interp, 0
         end
 
-        peak_frequencies, sorted_vals, transform_plot, tseries_plot = extract_peaks(mean_time_step, x_sol, t_interp, repeat_index, transform, transform_range)
+        #db scale
+
+        peak_frequencies, sorted_vals, mag_transform, freqs, x_sol = extract_peaks(mean_time_step, x_sol, t_interp, repeat_index, transform, transform_range)
+        mag_transform = mag_transform / sorted_vals[2]
+        mag_transform = 20 * log10.(mag_transform)
         if !plt
-            return highest_peak_deviation(peak_frequencies, sorted_vals)
+            return highest_peak_deviation(peak_frequencies, sorted_vals), freqs, mag_transform
         else
-            return highest_peak_deviation(peak_frequencies, sorted_vals), transform_plot, tseries_plot
+            return highest_peak_deviation(peak_frequencies, sorted_vals), freqs, mag_transform
         end
     # catch e
     #     println("Error in ode: ", e)
@@ -522,31 +527,35 @@ function ngspice_objective(p, plt=false, transform_range=(0, 8e6))
                 push!(transforms, t / (replication*length(x[i])))
             end
         else
-            return num - 1
+            return num - 1, [], [], x[1], t_interp, 0
         end
 
         peak_frequencies = []
         sorted_vals = []
-        transform_plots = []
-        tseries_plots = []
+        mag_transforms = []
+        freqs = []
+        tseries = []
         losses = Float64[]
 
         for i in 1:length(transforms)
             result = extract_peaks(mean_time_step, x[i], t_interp, repeat_index, transforms[i], transform_range)
             push!(peak_frequencies, result[1])
             push!(sorted_vals, result[2])
-            push!(transform_plots, result[3])
-            push!(tseries_plots, result[4])
+            push!(mag_transforms, result[3])
+            push!(freqs, result[4])
+            push!(tseries, result[5])
             push!(losses, float(highest_peak_deviation(result[1], result[2])))
         end
         min_loss = minimum(losses)
         min_idx = argmin(losses)
 
-        if !plt
-            return min_loss
-        else
-            return min_loss, transform_plots[min_idx], tseries_plots[min_idx], min_idx
-        end
+        #db scale
+        mag_transforms[min_idx] = mag_transforms[min_idx] / sorted_vals[min_idx][2]
+        mag_transforms[min_idx] = 20 * log10.(mag_transforms[min_idx])
+
+
+        return min_loss, mag_transforms[min_idx], freqs[min_idx], tseries[min_idx], t_interp, min_idx
+
     # catch e
     #     println("Error in ode: ", e)
     #     return 10^5
@@ -573,9 +582,10 @@ function bayesian_ngspice_objective(x)
     p = x
     println("Current: " * string(p))
     flush(stdout)
-    println("Loss: " * string(ngspice_objective(p)))
+    l, _, _, _, _, _ = ngspice_objective(p)
+    println("Loss: " * string(l))
     flush(stdout)
-    return ngspice_objective(p)
+    return l
 end
 
 function opt(num_its)

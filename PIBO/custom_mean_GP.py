@@ -2,7 +2,7 @@ import torch
 from botorch.models import SingleTaskGP
 from gpytorch.kernels import ScaleKernel, RBFKernel
 from gpytorch.likelihoods import GaussianLikelihood
-from custom_mean_function import CustomMean
+from PIBO.custom_mean_functions import CustomMean
 
 class CustomMeanGP(SingleTaskGP):
     def __init__(self, train_x, train_y):

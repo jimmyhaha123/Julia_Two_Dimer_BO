@@ -227,8 +227,8 @@ function jacobian_eig(p)
 end
 
 p = [-0.5, 2.88, 0.1, 1]
-# loss, f, transform = objective(p)
-# print(loss)
+loss, f, transform = objective(p)
+print(loss)
 # plot(f, transform, xlims=(0.2, 0.4))
 
 # n20_range = LinRange(0.27, 0.5, 200)
