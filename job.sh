@@ -1,4 +1,3 @@
-
 #!/bin/sh
 #SBATCH --job-name="julia_test"  # Job name
 #SBATCH --output=julia_out       # Standard output file
@@ -18,4 +17,3 @@ module load ngspice/43
 julia two_dimer_opt.jl
 
 cp * ~/tmp/
-

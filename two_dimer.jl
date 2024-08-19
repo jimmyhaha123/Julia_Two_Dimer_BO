@@ -666,7 +666,7 @@ function ngspice_opt_warm(num_its)
     vec1 = vcat(zeros(input_dim) .- 1.0, [0.0])
     vec2 = vcat(zeros(input_dim) .+ 4.0, [10.0])
     modeloptimizer = MAPGPOptimizer(
-        every=50,
+        every=5,
         noisebounds=[-4, 3],
         kernbounds=[vec1, vec2],
         # GaussianProcesses.get_param_names(model.kernel),

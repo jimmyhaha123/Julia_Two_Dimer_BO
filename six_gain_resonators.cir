@@ -28,11 +28,8 @@ Three coupled RLC Dimers with realistic gain
 .param resl6 = 200u                    $ resonator inductance of resonator 6
 
 .param factor1=0.36                    $ factor \in [0:1] modifies the shape of the nonlinear loss in resonator 1
-.param factor2=0.36                    $ factor \in [0:1] modifies the shape of the nonlinear loss in resonator 2
 .param factor3=0.36                    $ factor \in [0:1] modifies the shape of the nonlinear loss in resonator 3
-.param factor4=0.36                    $ factor \in [0:1] modifies the shape of the nonlinear loss in resonator 4
 .param factor5=0.36                    $ factor \in [0:1] modifies the shape of the nonlinear loss in resonator 5
-.param factor6=0.36                    $ factor \in [0:1] modifies the shape of the nonlinear loss in resonator 6
 
 .param lam1  = 0.1                     $ scaling of coupling capacitance 1
 .param lam2  = 0.1                     $ scaling of coupling capacitance 2
@@ -96,9 +93,9 @@ Rfb2      vo2    lcnode2   {gainr2}
 
 * Nonlinear loss
 *resistance to ground with back-to-back Diodes
-R2 lcnode2 lcnode2b  {factor2*gainr2}
-D21 lcnode2b 0 1N914
-D22 0 lcnode2b 1N914
+*R2 lcnode2 lcnode2b  {factor2*gainr2}
+*D21 lcnode2b 0 1N914
+*D22 0 lcnode2b 1N914
 
 
 *RESONATOR 3 WITH GAIN AND NONLINEAR LOSS
@@ -140,9 +137,9 @@ Rfb4      vo4    lcnode4   {gainr4}
 
 * Nonlinear loss
 *resistance to ground with back-to-back Diodes
-R4 lcnode4 lcnode4b  {factor4*gainr4}
-D41 lcnode4b 0 1N914
-D42 0 lcnode4b 1N914
+*R4 lcnode4 lcnode4b  {factor4*gainr4}
+*D41 lcnode4b 0 1N914
+*D42 0 lcnode4b 1N914
 
 
 *RESONATOR 5 WITH GAIN AND NONLINEAR LOSS
@@ -184,9 +181,9 @@ Rfb6      vo6    lcnode6   {gainr6}
 
 * Nonlinear loss
 *resistance to ground with back-to-back Diodes
-R6  lcnode6 lcnode6b  {factor6*gainr6}
-D61 lcnode6b 0 1N914
-D62 0 lcnode6b 1N914
+*R6  lcnode6 lcnode6b  {factor6*gainr6}
+*D61 lcnode6b 0 1N914
+*D62 0 lcnode6b 1N914
 
 
 *COUPLING OF RESONATORS
@@ -218,7 +215,7 @@ Cc56        lcnode5     lcnode6     {ccoupl5}  $ capacitive coupling 5 & 6
 
     set wr_singlescale                      $ only print out one time scale
 
-    wrdata curr_volt_vs_t.dat V(lcnode1),V(lcnode2),V(lcnode3),V(lcnode4),V(lcnode5),V(lcnode6)  $ write out voltage and current of the main node
+    wrdata six_gain_resonators.dat V(lcnode1),V(lcnode2),V(lcnode3),V(lcnode4),V(lcnode5),V(lcnode6)  $ write out voltage and current of the main node
     
     destroy all return [tref_tmp range 0 0] 	$ cleans the memory
 .endc

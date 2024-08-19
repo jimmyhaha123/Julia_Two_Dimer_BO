@@ -23,5 +23,10 @@ params = [0.9, 0.9, 0.9, 1.1, -0.6, 1.0, 0.5, -0.6, 1.3620790701170864, 0.0, 0.5
 params = [0.9259501468342337, 0.9370383303858767, 0.8556021732489235, 1.147449709932502, -0.6150562496186814, 0.9808652766864474, 0.512521117858977, -0.571913546816477, 1.3492302785758965, 0.0494632343878712, 0.533884893558711, 0.04355262793668439]
 result, freqs, mag_transform = objective(params, true, (0, 1))
 print(result)
-semilogy(freqs, mag_transform)
+
+# semilogy(freqs, mag_transform)
+# show()
+
+#db scale
+plot(freqs, mag_transform)
 show()
