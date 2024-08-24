@@ -1,5 +1,11 @@
+include("transform_library.jl")
+
 using DifferentialEquations, Plots, FFTW, Statistics, BayesianOptimization, GaussianProcesses, Distributions, Peaks, Interpolations, DSP
 using Base: redirect_stdout
+
+num = 40
+min = 0
+replication = 50
 
 # Systen definition
 function sys!(du, u, p, t)
@@ -83,7 +89,7 @@ function solve_ngspice_sys(p)
     write_ngspice_params("two_gain_resonators_v2.cir", p)
 
     # Define the path to the circuit file
-    circuit_file = "/Users/jimmy/Desktop/Jimmy/WTICS/two_dimer/two_gain_resonators_v2.cir"
+    circuit_file = "two_gain_resonators_v2.cir"
 
     # Use mktemp to create a temporary file and redirect stdout to it
     str = mktemp() do path, io
@@ -101,7 +107,7 @@ function solve_ngspice_sys(p)
     v2_vector = Float64[]
 
     # Read the file line by line
-    file_path = "/Users/jimmy/Desktop/Jimmy/WTICS/two_dimer/curr_volt_vs_t.dat"
+    file_path = "./curr_volt_vs_t.dat"
     open(file_path, "r") do file
         for line in eachline(file)
             split_line = split(line)
@@ -120,24 +126,6 @@ function solve_ngspice_sys(p)
     v2_vector = v2_vector[start_index:end]
     x = [v1_vector, v2_vector]
     return x, time_vector, time_vector[2] - time_vector[1]
-end
-
-# Loss function
-function highest_peak_deviation(freqs, vals)
-    num = 40
-    if length(vals) < num + 1
-        println("No enough peaks. ")
-        return 39
-    elseif vals[2] < 10^(-3) # First peak too small
-        println("Second peak too small. No oscillations. ")
-        return 39
-    else
-        sub_peaks = vals[2:num+1]
-        sub_peaks = sub_peaks / sub_peaks[1] # Normalization with respect to first peak
-        cost = sum(abs.(sub_peaks .- 1))
-        # println("Sucessful. Loss: " * string(cost))
-        return cost
-    end
 end
 
 # Takes in parameters and writes them to local ngspice file
@@ -314,64 +302,6 @@ function write_ngspice_params(filename,
 
 end
 
-# Check repetition, returns boolean repetition and repeat index.
-function repetition_check(x, t_interp, dimensionality=8)
-    first_data_point = [x[j][1] for j in 1:dimensionality]
-    epsilon = 0.01
-    repeating_times = []
-    repeating_indices = []
-
-    for i in 1:length(t_interp)
-        current_point = [x[j][i] for j in 1:dimensionality]
-        if isclose(current_point, first_data_point, epsilon)
-            push!(repeating_times, t_interp[i])
-            push!(repeating_indices, i)
-        end
-    end
-
-    repeat_index = -1
-    if (repeating_indices[end] > 20000)
-        repeat_index = repeating_indices[end]
-        println("Repetition found.")
-        repetition = true
-    end
-
-    # Checking for valid repetition
-    if repeat_index == -1
-        repeat_index = length(x[1])  # Corrected to use length of the first vector in x
-        println("No repeating index.")
-        repetition = false
-    end
-
-    return repetition, repeat_index
-end
-
-# Extract peaks, return peaj ferquencies, 
-# sorted amplitudes, time series and transform
-function extract_peaks(mean_time_step, x_sol, t_interp, repeat_index, transform, transform_range)
-    N = length(x_sol)
-    dt = mean_time_step
-    freqs = (0:N-1) ./ (N * dt)
-    half_N = ceil(Int, N / 2)
-    freqs = freqs[1:half_N]
-    transform = transform[1:half_N]
-    mag_transform = abs.(transform) .^ 2
-    pks, vals = findmaxima(mag_transform)
-    sorted_indices = sortperm(vals, rev=true)
-    sorted_pks = pks[sorted_indices]
-    sorted_vals = vals[sorted_indices] # Magnitude of peaks
-    peak_frequencies = freqs[sorted_pks] # Frequency of peaks
-    transform_plot = plot(freqs, mag_transform, title="Fourier Transform", xlabel="Frequency", ylabel="Magnitude", xlims=transform_range, ylims=(1e-9, 1e-1), yaxis=:log)
-
-    # dB scale transform plot
-    mag_transform = 20*log10.(mag_transform ./ sorted_vals[2])
-    yticks!(-60:20:20, string.(-60:20:20))
-    transform_plot = plot(freqs, mag_transform, title="Fourier Transform", xlabel="Frequency", ylabel="Magnitude", xlims=transform_range, ylims=(-60, 20))
-
-    tseries_plot = plot(t_interp, x_sol, xlims=[0.003, 0.0035])
-    return peak_frequencies, sorted_vals, transform_plot, tseries_plot
-end
-
 # Takes in parameters, generate loss, transform plot, and time series plot
 function objective(p, plt=false, transform_range=(0, 2.5))
     try
@@ -413,7 +343,7 @@ function ngspice_objective(p, plt=false, transform_range=(0, 8e6))
             transforms = []
             for i in 1:length(x)
                 x[i] = x[i][1:repeat_index]
-                t = fft(x[i])
+                t = augmented_fft(x[i])
                 push!(transforms, t / length(x[i]))
             end
         else
@@ -446,11 +376,6 @@ function ngspice_objective(p, plt=false, transform_range=(0, 8e6))
     #     println("Error in ode: ", e)
     #     return 10^5
     # end
-end
-
-# Returns whether the two points are close by element-wise criterion
-function isclose(point1, point2, eps)
-    return all(abs.(point1 - point2) .< eps)
 end
 
 function bayesian_objective(x)
