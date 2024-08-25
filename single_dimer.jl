@@ -1,6 +1,6 @@
 include("transform_library.jl")
 
-using DifferentialEquations, Plots, FFTW, Statistics, BayesianOptimization, GaussianProcesses, Distributions, Peaks, Interpolations, DSP
+using DifferentialEquations, FFTW, Statistics, BayesianOptimization, GaussianProcesses, Distributions, Peaks, Interpolations, DSP
 using Base: redirect_stdout
 
 num = 40
@@ -10,27 +10,22 @@ replication = 50
 # Systen definition
 function sys!(du, u, p, t)
     # Parameters
-    w2, w3, w4, k, an11, an10, an20, bn11, bn10, bn20, nu0, nu1 = p
+    w2, k, n11, n10, n20 = p
 
-    aN1(a1) = an11 * (abs(a1))^2 + an10
-    aN2(a2) = an20
-    bN1(b1) = bn11 * (abs(b1))^2 + bn10
-    bN2(b2) = bn20
-    nu(a2, b1) = nu0 + nu1*abs(a2 - b1)
+    N1(a1) = n11 * (abs(a1))^2 + n10
+    N2(a2) = n20
 
-    a1, a2, b1, b2 = u
-    du[1] = im*a1 + aN1(a1)*a1 +im*a2
-    du[2] = im*w2*a2 + aN2(a2)*a2 +im*a1 + im*nu(a2, b1)*b1
-    du[3] = im*w3*b1 + bN1(b1)*b1 +im*k*b2 + im*nu(a2, b1)*a2
-    du[4] = im*w4*b2 + bN2(b2)*b2 +im*k*b1
+    a1, a2= u
+    du[1] = im*a1 + N1(a1)*a1 +im*k*a2
+    du[2] = im*w2*a2 + N2(a2)*a2 + im*k*a1 
 end
 
 # Solve system, returns x solution, time solution, and mean time step
 function solve_sys(p)
     range = 0.5
-    u0 = [range * rand() + im*range * rand(), range * rand() + im*range * rand(), range * rand() + im*range * rand(), range * rand() + im*range * rand()]
+    u0 = [range * rand() + im*range * rand(), range * rand() + im*range * rand()]
     # Fixing initial condition for consistency
-    u0 = [0.1 + 0.1*im, 0.1 + 0.1*im, 0.1 + 0.1*im, 0.1 + 0.1*im]
+    u0 = [0.1 + 0.1*im, 0.1 + 0.1*im]
     t = 100000.0
     tspan = (0.0, t)
 
@@ -57,27 +52,15 @@ function solve_sys(p)
     x_sol_2 = [imag.(u[1]) for u in sol.u]
     x_sol_3 = [real.(u[2]) for u in sol.u]
     x_sol_4 = [imag.(u[2]) for u in sol.u]
-    x_sol_5 = [real.(u[3]) for u in sol.u]
-    x_sol_6 = [imag.(u[3]) for u in sol.u]
-    x_sol_7 = [real.(u[4]) for u in sol.u]
-    x_sol_8 = [imag.(u[4]) for u in sol.u]
     interp_func_1 = LinearInterpolation(time_points, x_sol_1)
     interp_func_2 = LinearInterpolation(time_points, x_sol_2)
     interp_func_3 = LinearInterpolation(time_points, x_sol_3)
     interp_func_4 = LinearInterpolation(time_points, x_sol_4)
-    interp_func_5 = LinearInterpolation(time_points, x_sol_5)
-    interp_func_6 = LinearInterpolation(time_points, x_sol_6)
-    interp_func_7 = LinearInterpolation(time_points, x_sol_7)
-    interp_func_8 = LinearInterpolation(time_points, x_sol_8)
     x_sol_1 = [interp_func_1(t) for t in t_interp]
     x_sol_2 = [interp_func_2(t) for t in t_interp]
     x_sol_3 = [interp_func_3(t) for t in t_interp]
     x_sol_4 = [interp_func_4(t) for t in t_interp]
-    x_sol_5 = [interp_func_5(t) for t in t_interp]
-    x_sol_6 = [interp_func_6(t) for t in t_interp]
-    x_sol_7 = [interp_func_7(t) for t in t_interp]
-    x_sol_8 = [interp_func_8(t) for t in t_interp]
-    x = [x_sol_1, x_sol_2, x_sol_3, x_sol_4, x_sol_5, x_sol_6, x_sol_7, x_sol_8]
+    x = [x_sol_1, x_sol_2, x_sol_3, x_sol_4]
     return x, t_interp, mean_time_step
 end
 
@@ -309,21 +292,44 @@ function objective(p, plt=false, transform_range=(0, 2.5))
         x, t_interp, mean_time_step = solve_sys(p)
         # Repetition check        
         repetition, repeat_index = repetition_check(x, t_interp)
+        t_interp = t_interp[1:repeat_index]
 
         if repetition == true
-            x_sol = x[3][1:repeat_index]
-            transform = fft(x_sol)
-            transform = transform / length(x_sol)
+            transforms = []
+            for i in 1:length(x)
+                x[i] = x[i][1:repeat_index]
+                t = augmented_fft(x[i], replication)
+                push!(transforms, t / length(x[i]))
+            end
         else
-            return 10 ^ 5
+            return 39
         end
 
-        peak_frequencies, sorted_vals, transform_plot, tseries_plot = extract_peaks(mean_time_step, x_sol, t_interp, repeat_index, transform, transform_range)
-        if !plt
-            return highest_peak_deviation(peak_frequencies, sorted_vals)
-        else
-            return highest_peak_deviation(peak_frequencies, sorted_vals), transform_plot, tseries_plot
+        peak_frequencies = []
+        sorted_vals = []
+        mag_transforms = []
+        freqs = []
+        tseries = []
+        losses = Float64[]
+
+        for i in 1:length(transforms)
+            result = extract_peaks(mean_time_step, x[i], t_interp, repeat_index, transforms[i], transform_range, replication)
+            push!(peak_frequencies, result[1])
+            push!(sorted_vals, result[2])
+            push!(mag_transforms, result[3])
+            push!(freqs, result[4])
+            push!(tseries, result[5])
+            push!(losses, float(highest_peak_deviation(result[1], result[2])))
         end
+        min_loss = minimum(losses)
+        min_idx = argmin(losses)
+
+        #db scale
+        mag_transforms[min_idx] = mag_transforms[min_idx] / sorted_vals[min_idx][2]
+        mag_transforms[min_idx] = 20 * log10.(mag_transforms[min_idx])
+
+
+        return min_loss, mag_transforms[min_idx], freqs[min_idx], tseries[min_idx], t_interp, min_idx
     catch e
         println("Error in ode: ", e)
         return 10^5
@@ -336,14 +342,14 @@ function ngspice_objective(p, plt=false, transform_range=(0, 8e6))
         # Solve system
         x, t_interp, mean_time_step = solve_ngspice_sys(p)
         # Repetition check        
-        repetition, repeat_index = repetition_check(x, t_interp, 2)
+        repetition, repeat_index = repetition_check(x, t_interp)
         t_interp = t_interp[1:repeat_index]
 
         if repetition == true
             transforms = []
             for i in 1:length(x)
                 x[i] = x[i][1:repeat_index]
-                t = augmented_fft(x[i])
+                t = augmented_fft(x[i], replication)
                 push!(transforms, t / length(x[i]))
             end
         else
@@ -352,26 +358,29 @@ function ngspice_objective(p, plt=false, transform_range=(0, 8e6))
 
         peak_frequencies = []
         sorted_vals = []
-        transform_plots = []
-        tseries_plots = []
+        mag_transforms = []
+        freqs = []
+        tseries = []
         losses = Float64[]
 
         for i in 1:length(transforms)
-            result = extract_peaks(mean_time_step, x[i], t_interp, repeat_index, transforms[i], transform_range)
+            result = extract_peaks(mean_time_step, x[i], t_interp, repeat_index, transforms[i], transform_range, replication)
             push!(peak_frequencies, result[1])
             push!(sorted_vals, result[2])
-            push!(transform_plots, result[3])
-            push!(tseries_plots, result[4])
+            push!(mag_transforms, result[3])
+            push!(freqs, result[4])
+            push!(tseries, result[5])
             push!(losses, float(highest_peak_deviation(result[1], result[2])))
         end
         min_loss = minimum(losses)
         min_idx = argmin(losses)
 
-        if !plt
-            return min_loss
-        else
-            return min_loss, transform_plots[min_idx], tseries_plots[min_idx], min_idx
-        end
+        #db scale
+        mag_transforms[min_idx] = mag_transforms[min_idx] / sorted_vals[min_idx][2]
+        mag_transforms[min_idx] = 20 * log10.(mag_transforms[min_idx])
+
+
+        return min_loss, mag_transforms[min_idx], freqs[min_idx], tseries[min_idx], t_interp, min_idx
     # catch e
     #     println("Error in ode: ", e)
     #     return 10^5

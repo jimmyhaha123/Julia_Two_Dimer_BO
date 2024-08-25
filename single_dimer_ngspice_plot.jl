@@ -1,4 +1,6 @@
 include("single_dimer.jl")
+using PyPlot
+PyPlot.matplotlib.use("TkAgg")
 
 p = [91.56838977355442, 9114.171523730261, 806.3990120136237, 1445.8980363167962, 0.33954143929635194, 0.15175839198898056]
 p = [130.25037277742967, 7744.3171805543225, 779.1903193441603, 1328.96566839553, 0.07979457396955941, 0.2760862404709119]
@@ -7,7 +9,12 @@ p = [73.66503907381308, 6980.047551864795, 543.8022037767349, 1156.0876792090266
 insert!(p, 3, 200)
 insert!(p, 5, 200)
 insert!(p, 9, 550)
-loss, transform_plot, tseries_plot, min_idx = ngspice_objective(p, true, (0, 1e6))
-display(transform_plot)
-#display(tseries_plot)
-println(loss)
+
+
+min_loss, mag_transform, freqs, tseries, t_interp, _ = ngspice_objective(p, true, (0, 1e6))
+
+plot(t_interp, tseries)
+show()
+
+plot(freqs, mag_transform)
+show()

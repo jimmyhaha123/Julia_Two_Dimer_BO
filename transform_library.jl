@@ -4,17 +4,17 @@ using Base: redirect_stdout
 
 num = 40
 min = 0
-replication = 50
+
 
 # First replicate the signal by num, then fo Fourier Transform
-function augmented_fft(x)
+function augmented_fft(x, replication)
     # Get the length of the original signal
     
     # Replicate the signal 100 times
     x_extended = repeat(x, replication)
     
     # Perform FFT on the extended signal
-    X = fft(x_extended)
+    X = fft(x_extended) / replication
     
     # Return the full FFT result
     return X
@@ -40,7 +40,8 @@ function highest_peak_deviation(freqs, vals)
 end
 
 # Repetition check
-function repetition_check(x, t_interp, dimensionality=8)
+function repetition_check(x, t_interp)
+    dimensionality = length(x)
     first_data_point = [x[j][1] for j in 1:dimensionality]
     epsilon = 0.05
     repeating_times = []
@@ -71,7 +72,7 @@ function repetition_check(x, t_interp, dimensionality=8)
     return repetition, repeat_index
 end
 
-function extract_peaks(mean_time_step, x_sol, t_interp, repeat_index, transform, transform_range)
+function extract_peaks(mean_time_step, x_sol, t_interp, repeat_index, transform, transform_range, replication)
     N = length(x_sol) * replication
     dt = mean_time_step
     freqs = (0:N-1) ./ (N * dt)

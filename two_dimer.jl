@@ -488,8 +488,8 @@ function objective(p, plt=false, transform_range=(0, 2.5))
 
         if repetition == true
             x_sol = x[1][1:repeat_index]
-            transform = augmented_fft(x_sol)
-            transform = transform / (replication * length(x_sol))
+            transform = augmented_fft(x_sol, replication)
+            transform = transform / (length(x_sol))
         else
             return 10 ^ 5, [], [], x, t_interp, 0
         end
@@ -523,8 +523,8 @@ function ngspice_objective(p, plt=false, transform_range=(0, 8e6))
             transforms = []
             for i in 1:length(x)
                 x[i] = x[i][1:repeat_index]
-                t = augmented_fft(x[i])
-                push!(transforms, t / (replication*length(x[i])))
+                t = augmented_fft(x[i], replication)
+                push!(transforms, t / (length(x[i])))
             end
         else
             return num - 1, [], [], x[1], t_interp, 0
