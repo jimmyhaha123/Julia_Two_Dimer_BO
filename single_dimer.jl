@@ -521,6 +521,69 @@ end
 
 
 
+function botorch_ngspice_objective(x)
+    p = (x[1], x[2], 200, x[3], 200, x[4], x[5], x[6], 550)
+    min_loss, _, _, _, _, _ = ngspice_objective(p, true, (0, 1e6))
+    return min_loss
+end
+
+function botorch_cmt_objective(p)
+    p = (x[1], x[2], x[3], x[4], x[5])
+    min_loss, mag_transform, freqs, tseries, t_interp, _ = objective(p, true, (0, 1e6))
+    return min_loss
+end
+
+
+
+
+if abspath(PROGRAM_FILE) == @__FILE__
+    func = ARGS[1]
+    x = [parse(Float64, ARGS[i]) for i in 2:length(ARGS)]
+    
+    local result = nothing  # Declare `result` as a local variable
+    
+    if func == "cmt"
+        # Redirect stdout and stderr to suppress print output
+        old_stdout = stdout
+        old_stderr = stderr
+        try
+            redirect_stdout(devnull)
+            redirect_stderr(devnull)
+            result = bayesian_objective(x[1:6])
+        finally
+            # Restore stdout and stderr
+            redirect_stdout(old_stdout)
+            redirect_stderr(old_stderr)
+        end
+    elseif func == "ngspice"
+        # Redirect stdout and stderr to suppress print output
+        old_stdout = stdout
+        old_stderr = stderr
+        try
+            redirect_stdout(devnull)
+            redirect_stderr(devnull)
+            result = bayesian_ngspice_objective(x)
+        finally
+            # Restore stdout and stderr
+            redirect_stdout(old_stdout)
+            redirect_stderr(old_stderr)
+        end
+    else
+        error("Incorrect function name.")
+    end
+    
+    if result == nothing
+        error("Result is nothing")
+    end
+    
+    println(result)
+end
+
+
+
+
+
+
 
 
 
