@@ -27,6 +27,9 @@ print(result)
 # semilogy(freqs, mag_transform)
 # show()
 
+plot(t_interp, tseries)
+show()
+
 #db scale
 plot(freqs, mag_transform)
 show()

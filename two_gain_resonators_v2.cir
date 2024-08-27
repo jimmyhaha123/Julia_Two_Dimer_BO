@@ -5,9 +5,9 @@
 .param pi = 3.1415926535
 .param gainr1 = 73.66503907381308                  $ gain resonator 1 resistance
 .param gainr2 = 6980.047551864795                  $ gain resonator 2 resistance
-.param resl1 = 200.0u                    $ resonator inductance of resonator 1
+.param resl1 = 200u                    $ resonator inductance of resonator 1
 .param resc1 = 543.8022037767349p                   $ resonator capacitance of resonator 1
-.param resl2 = 200.0u                    $ resonator inductance of resonator 2
+.param resl2 = 200u                    $ resonator inductance of resonator 2
 .param resc2 = 1156.0876792090266p                   $ resonator capacitance of resonator 2
 .param lam  = 0.4027742682261706                     $ scaling of coupling capacitance
 .param factor = 0.27689905702227396                    $ factor \in [0:1] modifies the shape of the nonlinear loss
@@ -17,7 +17,7 @@
 .param natfreq1 = natangfreq1/(2*pi)    $ natural frequency of circuit
 .param timestep = 1/(200*natfreq1)     $ timestep 
 .param tau = 2000/(natfreq1)           $ total evolution time
-.param voltdivr = 550.0
+.param voltdivr = 550
 
 *-------------------------------------------------------------
 * End of parameters...

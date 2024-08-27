@@ -77,7 +77,7 @@ function solve_ngspice_sys(p)
     # Use mktemp to create a temporary file and redirect stdout to it
     str = mktemp() do path, io
         redirect_stdout(io) do
-            run(`ngspice $circuit_file`)
+            run(`ngspice  $circuit_file`)
         end
         # Ensure all output is flushed to the file
         Base.Libc.flush_cstdio()
@@ -302,7 +302,7 @@ function objective(p, plt=false, transform_range=(0, 2.5))
                 push!(transforms, t / length(x[i]))
             end
         else
-            return 39
+            return num - 1, [], [], x[1], t_interp, 0
         end
 
         peak_frequencies = []
@@ -332,7 +332,7 @@ function objective(p, plt=false, transform_range=(0, 2.5))
         return min_loss, mag_transforms[min_idx], freqs[min_idx], tseries[min_idx], t_interp, min_idx
     catch e
         println("Error in ode: ", e)
-        return 10^5
+        return num - 1, [], [], [], [], 0
     end
 end
 
@@ -353,7 +353,7 @@ function ngspice_objective(p, plt=false, transform_range=(0, 8e6))
                 push!(transforms, t / length(x[i]))
             end
         else
-            return 39
+            return num - 1, [], [], x[1], t_interp, 0
         end
 
         peak_frequencies = []
@@ -388,10 +388,12 @@ function ngspice_objective(p, plt=false, transform_range=(0, 8e6))
 end
 
 function bayesian_objective(x)
-    # w2, w3, w4, k, an11, an10, an20, bn11, bn10, bn20, nu0, nu1
-    p = (x[1], x[2], x[3], x[4], x[5], x[6], x[7], x[8], x[9], x[10], x[11], x[12])
+    # w2, k, n11, n10, n20
+    p = (x[1], x[2], x[3], x[4], x[5])
     println("Current: " * string(p))
-    return objective(p)
+    min_loss, mag_transform, freqs, tseries, t_interp, _ = objective(p, true, (0, 1e6))
+    println("Loss: " * string(min_loss))
+    return min_loss
 end
 
 function bayesian_ngspice_objective(x)
@@ -403,23 +405,25 @@ function bayesian_ngspice_objective(x)
     p = (x[1], x[2], 200, x[3], 200, x[4], x[5], x[6], 550)
     println("Current: " * string(p))
     flush(stdout)
-    println("Loss: " * string(ngspice_objective(p)))
+    min_loss, _, _, _, _, _ = ngspice_objective(p, true, (0, 1e6))
+    println("Loss: " * string(min_loss))
     flush(stdout)
-    return ngspice_objective(p)
+    return min_loss
 end
 
 function opt(num_its)
     # [w2, w3, w4, k, an11, an10, an20, bn11, bn10, bn20, nu0, nu1]
-    lower_bound = [0.9, 0.9, 0.8, 1, -0.7, 0.9, 0.4, -0.7, 1.2, 0, 0.4, 0]
-    upper_bound = [1.1, 1.1, 1, 1.2, -0.5, 1.1, 0.6, -0.5, 1.4, 0.2, 0.6, 0.2]
+    lower_bound = [0.9, 0.9, -1, 0, 0]
+    upper_bound = [1.1, 1.1, 0, 5, 1]
+    
     input_dim = length(lower_bound)
-    model = ElasticGPE(input_dim, mean=MeanConst(0.0), kernel=SEArd(zeros(input_dim), 5.0), logNoise=0.0, capacity=3000)
+    model = ElasticGPE(input_dim, mean=MeanConst(0.0), kernel=SEArd(zeros(input_dim), 5.0), logNoise=-Inf, capacity=3000)
     set_priors!(model.mean, [Normal(1, 2)])
     vec1 = vcat(zeros(input_dim) .- 1.0, [0.0])
     vec2 = vcat(zeros(input_dim) .+ 4.0, [10.0])
     modeloptimizer = MAPGPOptimizer(
-        every=50,
-        noisebounds=[-4, 3],
+        every=5,
+        noisebounds=nothing,
         kernbounds=[vec1, vec2],
         # GaussianProcesses.get_param_names(model.kernel),
         maxeval=40)
@@ -482,13 +486,13 @@ function ngspice_opt_warm(num_its)
     lower_bound = [5, 5, 500, 500, 0.05, 0.1]
     upper_bound = [2000, 10000, 1500, 1500, 0.5, 0.5]
     input_dim = length(lower_bound)
-    model = ElasticGPE(input_dim, mean=MeanConst(0.0), kernel=SEArd(zeros(input_dim), 5.0), logNoise=0.0, capacity=3000)
+    model = ElasticGPE(input_dim, mean=MeanConst(0.0), kernel=SEArd(zeros(input_dim), 5.0), logNoise=-Inf, capacity=3000)
     set_priors!(model.mean, [Normal(1, 2)])
     vec1 = vcat(zeros(input_dim) .- 1.0, [0.0])
     vec2 = vcat(zeros(input_dim) .+ 4.0, [10.0])
     modeloptimizer = MAPGPOptimizer(
         every=50,
-        noisebounds=[-4, 3],
+        noisebounds=nothing,
         kernbounds=[vec1, vec2],
         # GaussianProcesses.get_param_names(model.kernel),
         maxeval=40)
@@ -507,7 +511,7 @@ function ngspice_opt_warm(num_its)
         repetitions=1,
         maxiterations=num_its,
         sense=Min,
-        initializer_iterations = 0,
+        initializer_iterations = 10,
         acquisitionoptions=(method=:LD_LBFGS, restarts=5, maxtime=0.1, maxeval=1000),
         verbosity=Progress)
     result = boptimize!(opt)

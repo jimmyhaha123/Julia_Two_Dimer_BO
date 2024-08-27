@@ -10,3 +10,5 @@ show()
 
 plot(freqs, mag_transform)
 show()
+
+println(min_loss)

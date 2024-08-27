@@ -5,36 +5,26 @@ using Base: redirect_stdout
 num = 40
 min = 0
 replication = 50
-# Augmented fft, does transform with repeated data
-function augmented_fft(x)
-    # Get the length of the original signal
-    
-    # Replicate the signal 100 times
-    x_extended = repeat(x, replication)
-    
-    # Perform FFT on the extended signal
-    X = fft(x_extended)
-    
-    # Return the full FFT result
-    return X
 
-end
 # Systen definition
 function sys!(du, u, p, t)
     # Parameters
-    w2, w3, w4, k, an11, an10, an20, bn11, bn10, bn20, nu0, nu1 = p
+    w2, w3, w4, w5, w6, k2, k3, k4, k5, an11, an10, an20, bn11, bn10, bn20, cn11, cn10, cn20 = p
 
     aN1(a1) = an11 * (abs(a1))^2 + an10
     aN2(a2) = an20
     bN1(b1) = bn11 * (abs(b1))^2 + bn10
     bN2(b2) = bn20
-    nu(a2, b1) = nu0 + nu1*abs(a2 - b1)
+    cN1(c1) = cn11 * (abs(c1))^2 + cn10
+    cN2(c2) = cn20
 
-    a1, a2, b1, b2 = u
+    a1, a2, b1, b2, c1, c2 = u
     du[1] = im*a1 + aN1(a1)*a1 +im*a2
-    du[2] = im*w2*a2 + aN2(a2)*a2 +im*a1 + im*nu(a2, b1)*b1
-    du[3] = im*w3*b1 + bN1(b1)*b1 +im*k*b2 + im*nu(a2, b1)*a2
-    du[4] = im*w4*b2 + bN2(b2)*b2 +im*k*b1
+    du[2] = im*w2*a2 + aN2(a2)*a2 + im*a1 + im*k2*b1
+    du[3] = im*w3*b1 + bN1(b1)*b1 + im*k3*b2 + im*k2*a2
+    du[4] = im*w4*b2 + bN2(b2)*b2 + im*k3*b1 + im*k4*c1
+    du[5] = im*w5*c1 + cN1(c1)*c1 + im*k4*b2 + im*k5*c2
+    du[6] = im*w6*c2 + cN2(c2)*c2 + im*k5*c1
 end
 
 # Solve system, returns x solution, time solution, and mean time step
@@ -42,7 +32,7 @@ function solve_sys(p)
     range = 0.5
     u0 = [range * rand() + im*range * rand(), range * rand() + im*range * rand(), range * rand() + im*range * rand(), range * rand() + im*range * rand()]
     # Fixing initial condition for consistency
-    u0 = [0.1 + 0.1*im, 0.1 + 0.1*im, 0.1 + 0.1*im, 0.1 + 0.1*im]
+    u0 = [0.1 + 0.1*im, 0.1 + 0.1*im, 0.1 + 0.1*im, 0.1 + 0.1*im, 0.1 + 0.1*im, 0.1 + 0.1*im]
     t = 100000.0
     tspan = (0.0, t)
 
@@ -74,6 +64,10 @@ function solve_sys(p)
     x_sol_6 = [imag.(u[3]) for u in sol_u]
     x_sol_7 = [real.(u[4]) for u in sol_u]
     x_sol_8 = [imag.(u[4]) for u in sol_u]
+    x_sol_9 = [real.(u[5]) for u in sol_u]
+    x_sol_10 = [imag.(u[5]) for u in sol_u]
+    x_sol_11 = [real.(u[6]) for u in sol_u]
+    x_sol_12 = [imag.(u[6]) for u in sol_u]
     interp_func_1 = LinearInterpolation(time_points, x_sol_1)
     interp_func_2 = LinearInterpolation(time_points, x_sol_2)
     interp_func_3 = LinearInterpolation(time_points, x_sol_3)
@@ -82,6 +76,10 @@ function solve_sys(p)
     interp_func_6 = LinearInterpolation(time_points, x_sol_6)
     interp_func_7 = LinearInterpolation(time_points, x_sol_7)
     interp_func_8 = LinearInterpolation(time_points, x_sol_8)
+    interp_func_9 = LinearInterpolation(time_points, x_sol_9)
+    interp_func_10 = LinearInterpolation(time_points, x_sol_10)
+    interp_func_11 = LinearInterpolation(time_points, x_sol_11)
+    interp_func_12 = LinearInterpolation(time_points, x_sol_12)
     x_sol_1 = [interp_func_1(t) for t in t_interp]
     x_sol_2 = [interp_func_2(t) for t in t_interp]
     x_sol_3 = [interp_func_3(t) for t in t_interp]
@@ -90,7 +88,11 @@ function solve_sys(p)
     x_sol_6 = [interp_func_6(t) for t in t_interp]
     x_sol_7 = [interp_func_7(t) for t in t_interp]
     x_sol_8 = [interp_func_8(t) for t in t_interp]
-    x = [x_sol_1, x_sol_2, x_sol_3, x_sol_4, x_sol_5, x_sol_6, x_sol_7, x_sol_8]
+    x_sol_9 = [interp_func_9(t) for t in t_interp]
+    x_sol_10 = [interp_func_10(t) for t in t_interp]
+    x_sol_11 = [interp_func_11(t) for t in t_interp]
+    x_sol_12 = [interp_func_12(t) for t in t_interp]
+    x = [x_sol_1, x_sol_2, x_sol_3, x_sol_4, x_sol_5, x_sol_6, x_sol_7, x_sol_8, x_sol_9, x_sol_10, x_sol_11, x_sol_12]
     return x, t_interp, mean_time_step
 end
 
@@ -154,29 +156,6 @@ function solve_ngspice_sys(p)
     return x, time_vector, time_vector[2] - time_vector[1]
 end
 
-# Loss function
-function highest_peak_deviation(freqs, vals)
-    min = num - 1
-    if length(vals) < num + 1
-        println("No enough peaks. ")
-        return min
-    elseif vals[2] < 10^(-3) # First peak too small
-        println("Second peak too small. No oscillations. ")
-        return min
-    else
-        sub_peaks = vals[2:num+1]
-        sub_peaks = sub_peaks / sub_peaks[1] # Normalization with respect to first peak
-        cost = sum(abs.(sub_peaks .- 1))
-        # println("Sucessful. Loss: " * string(cost))
-        return cost
-    end
-end
-
-function highest_difference(freqs, vals)
-    min = 0
-    return -vals[num] / vals[2]
-end
-
 # Takes in parameters and writes them to local ngspice file
 function write_ngspice_params(filename,
     p)
@@ -232,9 +211,9 @@ function write_ngspice_params(filename,
     .param resl5 = 200u                    \$ resonator inductance of resonator 5
     .param resl6 = 200u                    \$ resonator inductance of resonator 6
 
-    .param factor1 = $factor1                    \$ factor \in [0:1] modifies the shape of the nonlinear loss in resonator 1
-    .param factor3 = $factor3                     \$ factor \in [0:1] modifies the shape of the nonlinear loss in resonator 3
-    .param factor5 = $factor5                     \$ factor \in [0:1] modifies the shape of the nonlinear loss in resonator 5
+    .param factor1 = $factor1                    \$ factor in [0:1] modifies the shape of the nonlinear loss in resonator 1
+    .param factor3 = $factor3                     \$ factor in [0:1] modifies the shape of the nonlinear loss in resonator 3
+    .param factor5 = $factor5                     \$ factor in [0:1] modifies the shape of the nonlinear loss in resonator 5
 
     .param lam1  = $lam1                     \$ scaling of coupling capacitance 1
     .param lam2  = $lam2                     \$ scaling of coupling capacitance 2
@@ -487,110 +466,24 @@ function write_ngspice_params(filename,
 
 end
 
-# Check repetition, returns boolean repetition and repeat index.
-function repetition_check(x, t_interp, dimensionality=8)
-    first_data_point = [x[j][1] for j in 1:dimensionality]
-    epsilon = 0.05
-    repeating_times = []
-    repeating_indices = []
-
-    for i in 1:length(t_interp)
-        current_point = [x[j][i] for j in 1:dimensionality]
-        if isclose(current_point, first_data_point, epsilon)
-            push!(repeating_times, t_interp[i])
-            push!(repeating_indices, i)
-        end
-    end
-
-    repeat_index = -1
-    if (repeating_indices[end] > 50000)
-        repeat_index = repeating_indices[end]
-        println("Repetition found.")
-        repetition = true
-    end
-
-    # Checking for valid repetition
-    if repeat_index == -1
-        repeat_index = length(x[1])  # Corrected to use length of the first vector in x
-        println("No repeating index.")
-        repetition = false
-    end
-
-    return repetition, repeat_index
-end
-
-# Extract peaks, return peaj ferquencies, 
-# sorted amplitudes, time series and transform
-function extract_peaks(mean_time_step, x_sol, t_interp, repeat_index, transform, transform_range)
-    N = length(x_sol) * replication
-    dt = mean_time_step
-    freqs = (0:N-1) ./ (N * dt)
-    half_N = ceil(Int, N / 2)
-    freqs = freqs[1:half_N]
-    transform = transform[1:half_N]
-    mag_transform = abs.(transform) .^ 2
-    pks, vals = findmaxima(mag_transform)
-    sorted_indices = sortperm(vals, rev=true)
-    sorted_pks = pks[sorted_indices]
-    sorted_vals = vals[sorted_indices] # Magnitude of peaks
-    peak_frequencies = freqs[sorted_pks] # Frequency of peaks
-    # transform_plot = plot(freqs, mag_transform, title="Fourier Transform", xlabel="Frequency", ylabel="Magnitude", xlims=transform_range, ylims=(1e-9, 1e-1), yaxis=:log)
-
-    # dB scale transform plot
-    # mag_transform = 20*log10.(mag_transform ./ sorted_vals[2])
-    # yticks!(-60:20:20, string.(-60:20:20))
-    # transform_plot = plot(freqs, mag_transform, title="Fourier Transform", xlabel="Frequency", ylabel="Magnitude", xlims=transform_range, ylims=(-60, 20))
-
-    # tseries_plot = plot(t_interp, x_sol, xlims=[t_interp[1], t_interp[end]])
-    return peak_frequencies, sorted_vals, mag_transform, freqs, x_sol
-end
-
 # Takes in parameters, generate loss, transform plot, and time series plot
 function objective(p, plt=false, transform_range=(0, 2.5))
-    # try
+    try
         # Solve system
         x, t_interp, mean_time_step = solve_sys(p)
         # Repetition check        
         repetition, repeat_index = repetition_check(x, t_interp)
-
-        if repetition == true
-            x_sol = x[3][1:repeat_index]
-            transform = augmented_fft(x_sol)
-            transform = transform / length(x_sol)
-        else
-            return 10 ^ 5, [], [], [], []
-        end
-
-        peak_frequencies, sorted_vals, mag_transform, freqs, x_sol = extract_peaks(mean_time_step, x_sol, t_interp, repeat_index, transform, transform_range)
-        if !plt
-            return highest_peak_deviation(peak_frequencies, sorted_vals), freqs, mag_transform
-        else
-            return highest_peak_deviation(peak_frequencies, sorted_vals), freqs, mag_transform
-        end
-    # catch e
-    #     println("Error in ode: ", e)
-    #     return 10^5
-    # end
-end
-
-# Takes in parameters, generate loss, transform plot, time series plot, and min index.
-function ngspice_objective(p, plt=false, transform_range=(0, 8e6))
-    # try
-        # Solve system
-        x, t_interp, mean_time_step = solve_ngspice_sys(p)
-        # Repetition check        
-        repetition, repeat_index = repetition_check(x, t_interp, length(x))
         t_interp = t_interp[1:repeat_index]
 
         if repetition == true
             transforms = []
             for i in 1:length(x)
                 x[i] = x[i][1:repeat_index]
-                t = augmented_fft(x[i])
-                push!(transforms, t / (replication*length(x[i])))
+                t = augmented_fft(x[i], replication)
+                push!(transforms, t / (length(x[i])))
             end
         else
-            return num - 1, [], [], x[0], t_interp, 0
+            return num - 1, [], [], x[1], t_interp, 0
         end
 
         peak_frequencies = []
@@ -601,7 +494,7 @@ function ngspice_objective(p, plt=false, transform_range=(0, 8e6))
         losses = Float64[]
 
         for i in 1:length(transforms)
-            result = extract_peaks(mean_time_step, x[i], t_interp, repeat_index, transforms[i], transform_range)
+            result = extract_peaks(mean_time_step, x[i], t_interp, repeat_index, transforms[i], transform_range, replication)
             push!(peak_frequencies, result[1])
             push!(sorted_vals, result[2])
             push!(mag_transforms, result[3])
@@ -612,6 +505,61 @@ function ngspice_objective(p, plt=false, transform_range=(0, 8e6))
         min_loss = minimum(losses)
         min_idx = argmin(losses)
 
+        #db scale
+        mag_transforms[min_idx] = mag_transforms[min_idx] / sorted_vals[min_idx][2]
+        mag_transforms[min_idx] = 20 * log10.(mag_transforms[min_idx])
+
+        return min_loss, mag_transforms[min_idx], freqs[min_idx], tseries[min_idx], t_interp, min_idx
+    catch e
+        println("Error in ode: ", e)
+        return return num - 1, [], [], [], [], 0
+    end
+end
+
+# Takes in parameters, generate loss, transform plot, time series plot, and min index.
+function ngspice_objective(p, plt=false, transform_range=(0, 8e6))
+    # try
+        # Solve system
+        x, t_interp, mean_time_step = solve_ngspice_sys(p)
+        # Repetition check        
+        repetition, repeat_index = repetition_check(x, t_interp)
+        t_interp = t_interp[1:repeat_index]
+
+        if repetition == true
+            transforms = []
+            for i in 1:length(x)
+                x[i] = x[i][1:repeat_index]
+                t = augmented_fft(x[i], replication)
+                push!(transforms, t / (length(x[i])))
+            end
+        else
+            return num - 1, [], [], x[1], t_interp, 0
+        end
+
+        peak_frequencies = []
+        sorted_vals = []
+        mag_transforms = []
+        freqs = []
+        tseries = []
+        losses = Float64[]
+
+        for i in 1:length(transforms)
+            result = extract_peaks(mean_time_step, x[i], t_interp, repeat_index, transforms[i], transform_range, replication)
+            push!(peak_frequencies, result[1])
+            push!(sorted_vals, result[2])
+            push!(mag_transforms, result[3])
+            push!(freqs, result[4])
+            push!(tseries, result[5])
+            push!(losses, float(highest_peak_deviation(result[1], result[2])))
+        end
+        min_loss = minimum(losses)
+        min_idx = argmin(losses)
+
+        #db scale
+        mag_transforms[min_idx] = mag_transforms[min_idx] / sorted_vals[min_idx][2]
+        mag_transforms[min_idx] = 20 * log10.(mag_transforms[min_idx])
+
+
         return min_loss, mag_transforms[min_idx], freqs[min_idx], tseries[min_idx], t_interp, min_idx
 
     # catch e
@@ -620,16 +568,14 @@ function ngspice_objective(p, plt=false, transform_range=(0, 8e6))
     # end
 end
 
-# Returns whether the two points are close by element-wise criterion
-function isclose(point1, point2, eps)
-    return all(abs.(point1 - point2) .< eps)
-end
-
 function bayesian_objective(x)
-    # w2, w3, w4, k, an11, an10, an20, bn11, bn10, bn20, nu0, nu1
+    # w2, w3, w4, w5, w6, k2, k3, k4, k5, an11, an10, an20, bn11, bn10, bn20, cn11, cn10, cn20
     p = x
     println("Current: " * string(p))
-    return objective(p)
+    l, _, _, _, _, _ = objective(p)
+    println("Loss: " * string(l))
+    flush(stdout)
+    return l
 end
 
 function bayesian_ngspice_objective(x)
@@ -646,17 +592,17 @@ function bayesian_ngspice_objective(x)
 end
 
 function opt(num_its)
-    # [w2, w3, w4, k, an11, an10, an20, bn11, bn10, bn20, nu0, nu1]
-    lower_bound = [0.9, 0.9, 0.8, 1, -0.7, 0.9, 0.4, -0.7, 1.2, 0, 0.4, 0]
-    upper_bound = [1.1, 1.1, 1, 1.2, -0.5, 1.1, 0.6, -0.5, 1.4, 0.2, 0.6, 0.2]
+    # [w2, w3, w4, w5, w6, k2, k3, k4, k5, an11, an10, an20, bn11, bn10, bn20, cn11, cn10, cn20]
+    lower_bound = [0.9, 0.9, 0.9, 0.9, 0.9, 0.9, 0.9, 0.9, 0.9, -2, 0, 0, -2, 0, 0, -2, 0, 0]
+    upper_bound = [1.1, 1.1, 1.1, 1.1, 1.1, 1.1, 1.1, 1.1, 1.1, 0, 3, 1, 0, 3, 1, 0, 3, 1]
     input_dim = length(lower_bound)
-    model = ElasticGPE(input_dim, mean=MeanConst(0), kernel=SEArd(zeros(input_dim), 5.0), logNoise=0.0, capacity=3000)
+    model = ElasticGPE(input_dim, mean=MeanConst(0.0), kernel=SEArd(zeros(input_dim), 5.0), logNoise=-Inf, capacity=3000)
     set_priors!(model.mean, [Normal(1, 2)])
     vec1 = vcat(zeros(input_dim) .- 1.0, [0.0])
     vec2 = vcat(zeros(input_dim) .+ 4.0, [10.0])
     modeloptimizer = MAPGPOptimizer(
-        every=50,
-        noisebounds=[-4, 3],
+        every=5,
+        noisebounds=nothing ,
         kernbounds=[vec1, vec2],
         # GaussianProcesses.get_param_names(model.kernel),
         maxeval=40)
