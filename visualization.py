@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 import subprocess
 
 def objective(gainr1):
-    input_args = ['cmt'] + ['1.4', '1.0', '-1.0', '3.0', str(gainr1), '0.0']
+    input_args = ['cmt'] + ['1.4', '1.0', '-1.0', '3.0', str(gainr1), '0.0'] # The last entry is place holder
     result = subprocess.check_output(["julia", "single_dimer.jl"] + input_args)
     result = float(result.decode("utf-8").strip())
     return result
