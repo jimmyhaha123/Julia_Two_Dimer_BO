@@ -28,19 +28,3 @@ class SimpleCustomGP(ExactGP, GPyTorchModel):
         covar_x = self.covar_module(x)
         return MultivariateNormal(mean_x, covar_x)
     
-from ax.models.torch.botorch_modular.model import BoTorchModel
-from ax.models.torch.botorch_modular.surrogate import Surrogate
-
-
-ax_model = BoTorchModel(
-    surrogate=Surrogate(
-        # The model class to use
-        botorch_model_class=SimpleCustomGP,
-        # Optional, MLL class with which to optimize model parameters
-        # mll_class=ExactMarginalLogLikelihood,
-        # Optional, dictionary of keyword arguments to model constructor
-        # model_options={}
-    ),
-    # Optional, acquisition function class to use - see custom acquisition tutorial
-    # botorch_acqf_class=qExpectedImprovement,
-)

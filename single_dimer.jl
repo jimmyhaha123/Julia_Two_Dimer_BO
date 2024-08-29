@@ -491,14 +491,14 @@ function ngspice_opt_warm(num_its)
     vec1 = vcat(zeros(input_dim) .- 1.0, [0.0])
     vec2 = vcat(zeros(input_dim) .+ 4.0, [10.0])
     modeloptimizer = MAPGPOptimizer(
-        every=50,
+        every=5,
         noisebounds=nothing,
         kernbounds=[vec1, vec2],
         # GaussianProcesses.get_param_names(model.kernel),
         maxeval=40)
 
     # Initialization
-    x = [73.66503907381308, 6980.047551864795, 543.8022037767349, 1156.0876792090266, 0.4027742682261706, 0.27689905702227396]
+    x = [754.342294, 5, 543.8022037767349, 1156.0876792090266, 0.4027742682261706, 0.27689905702227396]
     y = -bayesian_ngspice_objective(x)
     append!(model, reshape(x, :, 1), [y]) 
 

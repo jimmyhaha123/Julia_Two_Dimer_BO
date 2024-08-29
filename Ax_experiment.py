@@ -114,6 +114,7 @@ with fast_smoke_test():
         parameters, trial_index = ax_client.get_next_trial()
         # Local evaluation here can be replaced with deployment to external system.
         ax_client.complete_trial(trial_index=trial_index, raw_data=evaluate(parameters))
+        
 
 parameters, values = ax_client.get_best_parameters()
 print(f"Best parameters: {parameters}")

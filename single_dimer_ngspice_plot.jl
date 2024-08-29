@@ -13,7 +13,7 @@ insert!(p, 9, 550)
 
 
 min_loss, mag_transform, freqs, tseries, t_interp, _ = ngspice_objective(p, true, (0, 1e6))
-
+println(min_loss)
 plot(t_interp, tseries)
 show()
 
