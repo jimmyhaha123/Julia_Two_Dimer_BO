@@ -2,7 +2,7 @@ import sympy as sp
 import numpy as np
 import nlopt
 
-def symbolic_jacobian(p):
+def symbolic_jacobian(p, dimer=1, sim_method='cmt'):
     w2, k, n11, n10, n20 = p
     # Define the symbolic variables
     I1, I2, theta = sp.symbols('I1 I2 theta')
@@ -27,7 +27,7 @@ def symbolic_jacobian(p):
     return jacobian_matrix_simplified, variables
 
 
-def find_fixed_points(p):
+def find_fixed_points(p, dimer=1, sim_method='cmt'):
     w2, k, n11, n10, n20 = p
     # Define the objective function as the sum of squared residuals
     def objective(x, grad):
@@ -82,13 +82,13 @@ def find_fixed_points(p):
 
     return combined_results
 
-def jacobian_eigenvalues(p):
+def jacobian_eigenvalues(p, dimer=1, sim_method='cmt'):
     w2, k, n11, n10, n20 = p
     # Compute the symbolic Jacobian matrix
-    jacobian_matrix, variables = symbolic_jacobian(w2, k, n11, n10, n20)
+    jacobian_matrix, variables = symbolic_jacobian([w2, k, n11, n10, n20])
     
     # Find the fixed points
-    fixed_points = find_fixed_points(w2, k, n11, n10, n20)
+    fixed_points = find_fixed_points([w2, k, n11, n10, n20])
     eigenvalues_list = []
 
     for x, _ in fixed_points:
@@ -105,17 +105,21 @@ def jacobian_eigenvalues(p):
 
     return eigenvalues_list
 
-def stability_constraint(p):
+
+
+def stability_constraint(p, dimer=1, sim_method='cmt'):
+    p = [t.item() for t in p]
     w2, k, n11, n10, n20 = p
-    eigenvalues = jacobian_eigenvalues(w2, k, n11, n10, n20)
-    eig_list = []
-    eig_list.extend(eigenvalues)
-    min_eigenvalue = min(eig_list, key=lambda x: x.real)
-    return min_eigenvalue
+    eigenvalues = jacobian_eigenvalues([w2, k, n11, n10, n20])
+    
+    # Flatten the list of arrays and convert them to a single list of complex numbers
+    eigenvalues = np.array(eigenvalues).flatten().tolist()
+    
+    # Extract the eigenvalue with the smallest real part
+    min_eigenvalue = min(eigenvalues, key=lambda x: x.real)
+    
+    return min_eigenvalue.real
+
 
 # Example usage
-eigenvalues = jacobian_eigenvalues(n11=-0.5, n10=2.88, n20=0.4, w2=1.4, k=1)
-
-for i, eig in enumerate(eigenvalues):
-    print(f"Eigenvalues for fixed point {i + 1}: {eig}")
-    print("-" * 50)
+# print(stability_constraint([1, 1, -0.5, 2.88, 0.3]))

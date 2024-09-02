@@ -21,48 +21,45 @@ from botorch.models.model_list_gp_regression import ModelListGP
 from botorch.models.transforms.outcome import Standardize
 from botorch.test_functions import Ackley
 from botorch.utils.transforms import unnormalize
+from loss_functions import *
+from stability import *
 
 warnings.filterwarnings("ignore")
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+# device = torch.device("cpu")
 dtype = torch.double
 tkwargs = {"device": device, "dtype": dtype}
 
 SMOKE_TEST = os.environ.get("SMOKE_TEST")
 
-fun = Ackley(dim=10, negate=True).to(**tkwargs)
-fun.bounds[0, :].fill_(-5)
-fun.bounds[1, :].fill_(10)
-dim = fun.dim
+# w2, k, n11, n10, n20
+lb = [0.5, 0.5, -1.0, 0.0, 0.0]
+ub = [1.5, 1.5, -0.2, 3.0, 1.0]
+bounds = [(lb[i], ub[i]) for i in range(len(lb))]
+
+fun = SingleDimerCMTLoss(bounds=bounds).to(**tkwargs)
 lb, ub = fun.bounds
+dim = fun.dim
+
 
 batch_size = 4
-n_init = 10
+n_init = 50
 max_cholesky_size = float("inf")  # Always use Cholesky
 
 # When evaluating the function, we must first unnormalize the inputs since
 # we will use normalized inputs x in the main optimizaiton loop
 def eval_objective(x):
-    """This is a helper function we use to unnormalize and evalaute a point"""
+    """This is a helper function we use to unnormalize and evalaute a point"""  
     return fun(unnormalize(x, fun.bounds))
 
 def c1(x):  # Equivalent to enforcing that sum(x) <= 0
-    return x.sum()
-
-
-def c2(x):  # Equivalent to enforcing that ||x||_2 <= 5
-    return torch.norm(x, p=2) - 5
-
+    return -stability_constraint(x)
 
 # We assume c1, c2 have same bounds as the Ackley function above
 def eval_c1(x):
     """This is a helper function we use to unnormalize and evalaute a point"""
-    return c1(unnormalize(x, fun.bounds))
-
-
-def eval_c2(x):
-    """This is a helper function we use to unnormalize and evalaute a point"""
-    return c2(unnormalize(x, fun.bounds))
+    return -stability_constraint(unnormalize(x, fun.bounds))
 
 
 @dataclass
@@ -216,7 +213,6 @@ def generate_batch(
 train_X = get_initial_points(dim, n_init)
 train_Y = torch.tensor([eval_objective(x) for x in train_X], **tkwargs).unsqueeze(-1)
 C1 = torch.tensor([eval_c1(x) for x in train_X], **tkwargs).unsqueeze(-1)
-C2 = torch.tensor([eval_c2(x) for x in train_X], **tkwargs).unsqueeze(-1)
 
 # Initialize TuRBO state
 state = ScboState(dim, batch_size=batch_size)
@@ -251,7 +247,6 @@ while not state.restart_triggered:  # Run until TuRBO converges
     # Fit GP models for objective and constraints
     model = get_fitted_model(train_X, train_Y)
     c1_model = get_fitted_model(train_X, C1)
-    c2_model = get_fitted_model(train_X, C2)
 
     # Generate a batch of candidates
     with gpytorch.settings.max_cholesky_size(max_cholesky_size):
@@ -260,18 +255,17 @@ while not state.restart_triggered:  # Run until TuRBO converges
             model=model,
             X=train_X,
             Y=train_Y,
-            C=torch.cat((C1, C2), dim=-1),
+            C=torch.cat((C1, torch.empty(0)), dim=-1),
             batch_size=batch_size,
             n_candidates=N_CANDIDATES,
-            constraint_model=ModelListGP(c1_model, c2_model),
+            constraint_model=ModelListGP(c1_model),
             sobol=sobol,
         )
 
     # Evaluate both the objective and constraints for the selected candidaates
     Y_next = torch.tensor([eval_objective(x) for x in X_next], dtype=dtype, device=device).unsqueeze(-1)
     C1_next = torch.tensor([eval_c1(x) for x in X_next], dtype=dtype, device=device).unsqueeze(-1)
-    C2_next = torch.tensor([eval_c2(x) for x in X_next], dtype=dtype, device=device).unsqueeze(-1)
-    C_next = torch.cat([C1_next, C2_next], dim=-1)
+    C_next = torch.cat([C1_next, torch.empty(0)], dim=-1)
 
     # Update TuRBO state
     state = update_state(state=state, Y_next=Y_next, C_next=C_next)
@@ -282,7 +276,6 @@ while not state.restart_triggered:  # Run until TuRBO converges
     train_X = torch.cat((train_X, X_next), dim=0)
     train_Y = torch.cat((train_Y, Y_next), dim=0)
     C1 = torch.cat((C1, C1_next), dim=0)
-    C2 = torch.cat((C2, C2_next), dim=0)
 
     # Print current status. Note that state.best_value is always the best
     # objective value found so far which meets the constraints, or in the case
@@ -306,7 +299,7 @@ fig, ax = plt.subplots(figsize=(8, 6))
 
 score = train_Y.clone()
 # Set infeasible to -inf
-score[~(torch.cat((C1, C2), dim=-1) <= 0).all(dim=-1)] = float("-inf")
+score[~(torch.cat((C1, torch.empty(0)), dim=-1) <= 0).all(dim=-1)] = float("-inf")
 fx = np.maximum.accumulate(score.cpu())
 plt.plot(fx, marker="", lw=3)
 
