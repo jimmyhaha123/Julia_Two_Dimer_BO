@@ -2,7 +2,8 @@ import sympy as sp
 import numpy as np
 import nlopt
 
-def symbolic_jacobian(n11, n10, n20, w2, k):
+def symbolic_jacobian(p):
+    w2, k, n11, n10, n20 = p
     # Define the symbolic variables
     I1, I2, theta = sp.symbols('I1 I2 theta')
 
@@ -25,7 +26,9 @@ def symbolic_jacobian(n11, n10, n20, w2, k):
 
     return jacobian_matrix_simplified, variables
 
-def find_fixed_points(n11, n10, n20, w2, k):
+
+def find_fixed_points(p):
+    w2, k, n11, n10, n20 = p
     # Define the objective function as the sum of squared residuals
     def objective(x, grad):
         I1, I2, theta = x
@@ -79,12 +82,13 @@ def find_fixed_points(n11, n10, n20, w2, k):
 
     return combined_results
 
-def jacobian_eigenvalues(n11, n10, n20, w2, k):
+def jacobian_eigenvalues(p):
+    w2, k, n11, n10, n20 = p
     # Compute the symbolic Jacobian matrix
-    jacobian_matrix, variables = symbolic_jacobian(n11, n10, n20, w2, k)
+    jacobian_matrix, variables = symbolic_jacobian(w2, k, n11, n10, n20)
     
     # Find the fixed points
-    fixed_points = find_fixed_points(n11, n10, n20, w2, k)
+    fixed_points = find_fixed_points(w2, k, n11, n10, n20)
     eigenvalues_list = []
 
     for x, _ in fixed_points:
@@ -101,8 +105,16 @@ def jacobian_eigenvalues(n11, n10, n20, w2, k):
 
     return eigenvalues_list
 
+def stability_constraint(p):
+    w2, k, n11, n10, n20 = p
+    eigenvalues = jacobian_eigenvalues(w2, k, n11, n10, n20)
+    eig_list = []
+    eig_list.extend(eigenvalues)
+    min_eigenvalue = min(eig_list, key=lambda x: x.real)
+    return min_eigenvalue
+
 # Example usage
-eigenvalues = jacobian_eigenvalues(n11=-0.5, n10=2.88, n20=0.25, w2=1.4, k=1)
+eigenvalues = jacobian_eigenvalues(n11=-0.5, n10=2.88, n20=0.4, w2=1.4, k=1)
 
 for i, eig in enumerate(eigenvalues):
     print(f"Eigenvalues for fixed point {i + 1}: {eig}")
