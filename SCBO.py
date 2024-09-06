@@ -45,7 +45,7 @@ dim = fun.dim
 
 
 batch_size = 4
-n_init = 30
+n_init = 3
 max_cholesky_size = float("inf")  # Always use Cholesky
 
 # When evaluating the function, we must first unnormalize the inputs since
@@ -54,7 +54,7 @@ def eval_objective(x):
     """This is a helper function we use to unnormalize and evalaute a point"""  
     return fun(unnormalize(x, fun.bounds))
 
-def c1(x):  # Equivalent to enforcing that sum(x) <= 0
+def c1(x):  # The stability constraint, >0 for fixed points
     return -stability_constraint(x)
 
 # We assume c1, c2 have same bounds as the Ackley function above
@@ -244,7 +244,12 @@ def get_fitted_model(X, Y):
     return model
 
 
-while not state.restart_triggered:  # Run until TuRBO converges
+while True:  # Run until manually stopped or other stopping criteria
+    if state.restart_triggered:
+        # Reinitialize the trust region after a restart
+        print(f"Restart triggered! Reinitializing the trust region.")
+        state = ScboState(dim=dim, batch_size=batch_size)
+        
     # Fit GP models for objective and constraints
     model = get_fitted_model(train_X, train_Y)
     c1_model = get_fitted_model(train_X, C1)
@@ -263,7 +268,7 @@ while not state.restart_triggered:  # Run until TuRBO converges
             sobol=sobol,
         )
 
-    # Evaluate both the objective and constraints for the selected candidaates
+    # Evaluate both the objective and constraints for the selected candidates
     Y_next = torch.tensor([eval_objective(x) for x in X_next], dtype=dtype, device=device).unsqueeze(-1)
     C1_next = torch.tensor([eval_c1(x) for x in X_next], dtype=dtype, device=device).unsqueeze(-1)
     C_next = torch.cat([C1_next, torch.empty(0)], dim=-1)
@@ -272,36 +277,26 @@ while not state.restart_triggered:  # Run until TuRBO converges
     state = update_state(state=state, Y_next=Y_next, C_next=C_next)
 
     # Append data. Note that we append all data, even points that violate
-    # the constraints. This is so our constraint models can learn more
-    # about the constraint functions and gain confidence in where violations occur.
+    # the constraints.
     train_X = torch.cat((train_X, X_next), dim=0)
+    train_X_unnormalized = train_X
     train_Y = torch.cat((train_Y, Y_next), dim=0)
     C1 = torch.cat((C1, C1_next), dim=0)
 
-    print(f"Size of train_X: {train_X.size()}")
-    print(f"Size of train_Y: {train_Y.size()}")
-    print(f"Size of C1: {C1.size()}")
-
-    train_X_np = train_X.numpy()
-    train_Y_np = train_Y.numpy().flatten()  # Flatten to make it 1D
-    C1_np = C1.numpy().flatten()            # Flatten to make it 1D
-
-    # Creating column names for train_X based on its number of features
+    # Save the DataFrame to a CSV file
+    train_X_np = train_X_unnormalized.numpy()
+    train_Y_np = train_Y.numpy().flatten()
+    C1_np = C1.numpy().flatten()
     train_X_columns = [f'train_X_{i+1}' for i in range(train_X_np.shape[1])]
 
     # Combine the data into a DataFrame
-    df = pd.DataFrame(train_X_np, columns=train_X_columns)  # Each column of train_X is separate
-    df['train_Y'] = train_Y_np  # Adding train_Y as a separate column
-    df['C1'] = C1_np            # Adding C1 as a separate column
+    df = pd.DataFrame(train_X_np, columns=train_X_columns)
+    df['train_Y'] = train_Y_np
+    df['C1'] = C1_np
 
-    # Save the DataFrame to a CSV file
-    csv_file_path = "training_data.csv"  # You can set the desired file path here
-    df.to_csv(csv_file_path, index=False)
+    df.to_csv("training_data.csv", index=False)
 
-    # Print current status. Note that state.best_value is always the best
-    # objective value found so far which meets the constraints, or in the case
-    # that no points have been found yet which meet the constraints, it is the
-    # objective value of the point with the minimum constraint violation.
+    # Print current status
     if (state.best_constraint_values <= 0).all():
         print(f"{len(train_X)}) Best value: {state.best_value:.2e}, TR length: {state.length:.2e}")
     else:
@@ -311,25 +306,31 @@ while not state.restart_triggered:  # Run until TuRBO converges
             f"{violation:.2e}, TR length: {state.length:.2e}"
         )
 
-import matplotlib.pyplot as plt
-import numpy as np
-from matplotlib import rc
 
 
-fig, ax = plt.subplots(figsize=(8, 6))
 
-score = train_Y.clone()
-# Set infeasible to -inf
-score[~(torch.cat((C1, torch.empty(0)), dim=-1) <= 0).all(dim=-1)] = float("-inf")
-fx = np.maximum.accumulate(score.cpu())
-plt.plot(fx, marker="", lw=3)
 
-plt.plot([0, len(train_Y)], [fun.optimal_value, fun.optimal_value], "k--", lw=3)
-plt.ylabel("Function value", fontsize=18)
-plt.xlabel("Number of evaluations", fontsize=18)
-plt.title("10D Ackley with 2 outcome constraints", fontsize=20)
-plt.xlim([0, len(train_Y)])
-plt.ylim([-15, 1])
 
-plt.grid(True)
-plt.show()
+
+# import matplotlib.pyplot as plt
+# import numpy as np
+# from matplotlib import rc
+
+
+# fig, ax = plt.subplots(figsize=(8, 6))
+
+# score = train_Y.clone()
+# # Set infeasible to -inf
+# score[~(torch.cat((C1, torch.empty(0)), dim=-1) <= 0).all(dim=-1)] = float("-inf")
+# fx = np.maximum.accumulate(score.cpu())
+# plt.plot(fx, marker="", lw=3)
+
+# plt.plot([0, len(train_Y)], [fun.optimal_value, fun.optimal_value], "k--", lw=3)
+# plt.ylabel("Function value", fontsize=18)
+# plt.xlabel("Number of evaluations", fontsize=18)
+# plt.title("10D Ackley with 2 outcome constraints", fontsize=20)
+# plt.xlim([0, len(train_Y)])
+# plt.ylim([-15, 1])
+
+# plt.grid(True)
+# plt.show()
