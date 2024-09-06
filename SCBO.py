@@ -23,11 +23,12 @@ from botorch.test_functions import Ackley
 from botorch.utils.transforms import unnormalize
 from loss_functions import *
 from stability import *
+import pandas as pd
 
 warnings.filterwarnings("ignore")
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-# device = torch.device("cpu")
+device = torch.device("cpu")
 dtype = torch.double
 tkwargs = {"device": device, "dtype": dtype}
 
@@ -44,7 +45,7 @@ dim = fun.dim
 
 
 batch_size = 4
-n_init = 50
+n_init = 30
 max_cholesky_size = float("inf")  # Always use Cholesky
 
 # When evaluating the function, we must first unnormalize the inputs since
@@ -276,6 +277,26 @@ while not state.restart_triggered:  # Run until TuRBO converges
     train_X = torch.cat((train_X, X_next), dim=0)
     train_Y = torch.cat((train_Y, Y_next), dim=0)
     C1 = torch.cat((C1, C1_next), dim=0)
+
+    print(f"Size of train_X: {train_X.size()}")
+    print(f"Size of train_Y: {train_Y.size()}")
+    print(f"Size of C1: {C1.size()}")
+
+    train_X_np = train_X.numpy()
+    train_Y_np = train_Y.numpy().flatten()  # Flatten to make it 1D
+    C1_np = C1.numpy().flatten()            # Flatten to make it 1D
+
+    # Creating column names for train_X based on its number of features
+    train_X_columns = [f'train_X_{i+1}' for i in range(train_X_np.shape[1])]
+
+    # Combine the data into a DataFrame
+    df = pd.DataFrame(train_X_np, columns=train_X_columns)  # Each column of train_X is separate
+    df['train_Y'] = train_Y_np  # Adding train_Y as a separate column
+    df['C1'] = C1_np            # Adding C1 as a separate column
+
+    # Save the DataFrame to a CSV file
+    csv_file_path = "training_data.csv"  # You can set the desired file path here
+    df.to_csv(csv_file_path, index=False)
 
     # Print current status. Note that state.best_value is always the best
     # objective value found so far which meets the constraints, or in the case

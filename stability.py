@@ -116,9 +116,9 @@ def stability_constraint(p, dimer=1, sim_method='cmt'):
     eigenvalues = np.array(eigenvalues).flatten().tolist()
     
     # Extract the eigenvalue with the smallest real part
-    min_eigenvalue = min(eigenvalues, key=lambda x: x.real)
+    max_eigenvalue = max(eigenvalues, key=lambda x: x.real)
     
-    return min_eigenvalue.real
+    return max_eigenvalue.real
 
 
 # Example usage
