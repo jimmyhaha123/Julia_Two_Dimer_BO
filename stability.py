@@ -26,7 +26,6 @@ def symbolic_jacobian(p, dimer=1, sim_method='cmt'):
 
     return jacobian_matrix_simplified, variables
 
-
 def find_fixed_points(p, dimer=1, sim_method='cmt'):
     w2, k, n11, n10, n20 = p
     # Define the objective function as the sum of squared residuals
@@ -49,7 +48,7 @@ def find_fixed_points(p, dimer=1, sim_method='cmt'):
     opt.set_upper_bounds(upper_bounds)
 
     # Generate random initial conditions
-    num_random_conditions = 10000
+    num_random_conditions = 2000
     initial_conditions = np.random.uniform(
         low=[0.1, 0.1, 0],
         high=[10.0, 10.0, 2 * np.pi],
@@ -105,9 +104,8 @@ def jacobian_eigenvalues(p, dimer=1, sim_method='cmt'):
 
     return eigenvalues_list
 
-
-
 def stability_constraint(p, dimer=1, sim_method='cmt'):
+    
     p = [t.item() for t in p]
     w2, k, n11, n10, n20 = p
     eigenvalues = jacobian_eigenvalues([w2, k, n11, n10, n20])
@@ -115,7 +113,7 @@ def stability_constraint(p, dimer=1, sim_method='cmt'):
     # Flatten the list of arrays and convert them to a single list of complex numbers
     eigenvalues = np.array(eigenvalues).flatten().tolist()
     
-    # Extract the eigenvalue with the smallest real part
+    # Extract the eigenvalue with the largest real part
     max_eigenvalue = max(eigenvalues, key=lambda x: x.real)
     
     return max_eigenvalue.real
@@ -123,3 +121,6 @@ def stability_constraint(p, dimer=1, sim_method='cmt'):
 
 # Example usage
 # print(stability_constraint([1, 1, -0.5, 2.88, 0.3]))
+
+p = [1.4, 1, -0.5, 2.88, 0.25]
+print(jacobian_eigenvalues(p = [1.4, 1, -0.5, 2.88, 0.25]))

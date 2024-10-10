@@ -11,6 +11,13 @@ def single_dimer_ngspice_loss(p):
     result = float(result.decode("utf-8").strip())
     return result
 
+def single_dimer_cmt_loss(p: List[float]) -> float:
+    w2, k, n11, n10, n20 = p
+    input_args = ['cmt'] + [str(w2), str(k), str(n11), str(n10), str(n20), '-1000.0']
+    result = subprocess.check_output(["julia", "single_dimer.jl"] + input_args)
+    result = float(result.decode("utf-8").strip())
+    return result
+
 class SingleDimerCMTLoss(SyntheticTestFunction):
     r"""Single Dimer CMT Loss function.
 
@@ -53,11 +60,13 @@ class SingleDimerCMTLoss(SyntheticTestFunction):
             result = -self.single_dimer_cmt_loss(p)
             results.append(result)
         return torch.tensor(results, dtype=torch.float32)
-
-    @staticmethod
-    def single_dimer_cmt_loss(p: List[float]) -> float:
+    
+    def single_dimer_cmt_loss(self, p: List[float]) -> float:
         w2, k, n11, n10, n20 = p
         input_args = ['cmt'] + [str(w2), str(k), str(n11), str(n10), str(n20), '-1000.0']
         result = subprocess.check_output(["julia", "single_dimer.jl"] + input_args)
         result = float(result.decode("utf-8").strip())
         return result
+        
+
+
