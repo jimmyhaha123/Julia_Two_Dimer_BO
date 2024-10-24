@@ -26,12 +26,17 @@ function sys!(du, u, p, t)
     du[4] = im*w4*b2 + bN2(b2)*b2 +im*k*b1
 end
 
+# Transform the initial condition in polar coordinates to Cartesian coordinates
+function polar_to_cartesian()
+    pass
+end
+
 # Solve system, returns x solution, time solution, and mean time step
 function solve_sys(p)
     range = 0.5
     u0 = [range * rand() + im*range * rand(), range * rand() + im*range * rand(), range * rand() + im*range * rand(), range * rand() + im*range * rand()]
     # Fixing initial condition for consistency
-    u0 = [0.1 + 0.1*im, 0.1 + 0.1*im, 0.1 + 0.1*im, 0.1 + 0.1*im]
+    # u0 = [0.1 + 0.1*im, 0.1 + 0.1*im, 0.1 + 0.1*im, 0.1 + 0.1*im]
     t = 100000.0
     tspan = (0.0, t)
 
