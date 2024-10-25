@@ -3,9 +3,7 @@ include("stability.jl")
 
 using DifferentialEquations, FFTW, Statistics, BayesianOptimization, GaussianProcesses, Distributions, Peaks, Interpolations, DSP
 using Base: redirect_stdout
-using PyCall
 
-stability = pyimport("stability")
 num = 40
 min = 0
 replication = 50
