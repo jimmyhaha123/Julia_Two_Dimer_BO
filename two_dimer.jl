@@ -1,4 +1,5 @@
 include("transform_library.jl")
+include("stability.jl")
 
 using DifferentialEquations, FFTW, Statistics, BayesianOptimization, GaussianProcesses, Distributions, Peaks, Interpolations, DSP
 using Base: redirect_stdout
@@ -38,6 +39,7 @@ function solve_sys(p)
     # u0 = [range * rand() + im*range * rand(), range * rand() + im*range * rand(), range * rand() + im*range * rand(), range * rand() + im*range * rand()]
     # Fixing initial condition for consistency
     u0 = [0.1 + 0.1*im, 0.1 + 0.1*im, 0.1 + 0.1*im, 0.1 + 0.1*im]
+    u0 = stability_constraint(p, 2)[2]  # Using the initial condition selection
     t = 100000.0
     tspan = (0.0, t)
 
