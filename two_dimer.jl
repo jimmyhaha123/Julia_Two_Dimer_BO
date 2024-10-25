@@ -37,7 +37,8 @@ function solve_sys(p)
     # u0 = [range * rand() + im*range * rand(), range * rand() + im*range * rand(), range * rand() + im*range * rand(), range * rand() + im*range * rand()]
     # Fixing initial condition for consistency
     u0 = [0.1 + 0.1*im, 0.1 + 0.1*im, 0.1 + 0.1*im, 0.1 + 0.1*im]
-    u0 = stability_constraint(p, 2)[2]  # Using the initial condition selection
+    # u0 = collect(stability_constraint(p, 2)[2])  # Using the initial condition selection
+    println("Initial condition: " * string(u0))
     t = 100000.0
     tspan = (0.0, t)
 

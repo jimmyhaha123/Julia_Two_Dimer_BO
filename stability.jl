@@ -236,5 +236,5 @@ function stability_constraint(p, dimer=1, sim_method="cmt")
 end
 
 # Example usage
-p = [1, 1.1, 0.9, 1, -1, 0.5, 0.1, -1, 0.4, 0.1, 1]
-println(stability_constraint(p, 2)[2])
+# p = [1, 1.1, 0.9, 1, -1, 0.5, 0.1, -1, 0.4, 0.1, 1]
+# println(stability_constraint(p, 2)[2])
