@@ -467,4 +467,4 @@ opt(n_init=100)
 # plt.plot(df["n20"], df["loss"])
 # plt.show()
 
-    
+# Biased sampling visualization

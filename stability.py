@@ -231,16 +231,38 @@ def stability_constraint(p, dimer=1, sim_method='cmt'):
             if value in sublist:
                 return (i, sublist.index(value))
             
+    # Returns default initial condition if there are no fixed points
     def random_ic():
-        if dimer == 1: return
-        elif dimer == 0: return 
+        if dimer == 1: return [0.5*np.random.rand(), 0.5*np.random.rand(), 2*np.pi*np.random.rand()]
+        elif dimer == 2: return [0.5*np.random.rand(), 0.5*np.random.rand(), 0.5*np.random.rand(), 0.5*np.random.rand(), 2*np.pi*np.random.rand(), 2*np.pi*np.random.rand(), 2*np.pi*np.random.rand()]
 
+    # Converts the initial condition to Cartesian coordinates
+    def convert_contesian(x):
+        if dimer == 2:
+            I1, I2, I3, I4, theta1, theta2, theta3 = x
+            phi1 = 0
+            phi2 = phi1 - theta1
+            phi3 = phi2 - theta2
+            phi4 = phi3 - theta3
+            a1 = np.sqrt(I1) * np.exp(1j * phi1)
+            a2 = np.sqrt(I2) * np.exp(1j * phi2)
+            b1 = np.sqrt(I3) * np.exp(1j * phi3)
+            b2 = np.sqrt(I4) * np.exp(1j * phi4)
+            return a1, a2, b1, b2
+        elif dimer == 1:
+            I1, I2, theta = x
+            a1, a2 = 0
+            phi1 = 0
+            phi2 = theta
+            a1 = np.sqrt(I1) * np.exp(1j * phi1)
+            a2 = np.sqrt(I2) * np.exp(1j * phi2)
+            return a1, a2
 
     # Get the original index in the nested list
     max_idx = find_original_index(eigenvalues, max_eigenvalue)
     # print(f"Fixed point number: {max_idx[0]}")
     if max_eigenvalue == []:
-        return 1.0, random_ic() # When no fixed points are found; assuem strong limit cycle
+        return 1.0, convert_contesian(random_ic()) # When no fixed points are found; assuem strong limit cycle
     
     return max_eigenvalue.real, fixed_points[max_idx[0]][0]  # Returns the max real eigenvalue and also corresponding fixed point
 

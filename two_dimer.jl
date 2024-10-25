@@ -2,8 +2,9 @@ include("transform_library.jl")
 
 using DifferentialEquations, FFTW, Statistics, BayesianOptimization, GaussianProcesses, Distributions, Peaks, Interpolations, DSP
 using Base: redirect_stdout
+using PyCall
 
-
+stability = pyimport("stability")
 num = 40
 min = 0
 replication = 50
@@ -34,9 +35,9 @@ end
 # Solve system, returns x solution, time solution, and mean time step
 function solve_sys(p)
     range = 0.5
-    u0 = [range * rand() + im*range * rand(), range * rand() + im*range * rand(), range * rand() + im*range * rand(), range * rand() + im*range * rand()]
+    # u0 = [range * rand() + im*range * rand(), range * rand() + im*range * rand(), range * rand() + im*range * rand(), range * rand() + im*range * rand()]
     # Fixing initial condition for consistency
-    # u0 = [0.1 + 0.1*im, 0.1 + 0.1*im, 0.1 + 0.1*im, 0.1 + 0.1*im]
+    u0 = [0.1 + 0.1*im, 0.1 + 0.1*im, 0.1 + 0.1*im, 0.1 + 0.1*im]
     t = 100000.0
     tspan = (0.0, t)
 
