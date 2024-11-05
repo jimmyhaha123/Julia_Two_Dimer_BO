@@ -40,12 +40,12 @@ tkwargs = {"device": device, "dtype": dtype}
 
 SMOKE_TEST = os.environ.get("SMOKE_TEST")
 
-# w2, k, n11, n10, n20
-lb = [0.7, 0.7, -0.7, 0.0, 0.0]
-ub = [1.3, 1.3, -0.3, 3.0, 1.0]
+# w2, w3, w4, k, an11, an10, an20, bn11, bn10, bn20, nu0, nu1
+lb = [0.9259501468342337, 0.9370383303858767, 0.8556021732489235, 1.147449709932502, -0.6150562496186814, 0.5, 0.512521117858977, -0.571913546816477, 1.3492302785758965, 0.0494632343878712, 0.533884893558711]
+ub = [0.9259501468342337, 0.9370383303858767, 0.8556021732489235, 1.147449709932502, -0.6150562496186814, 1.5, 0.512521117858977, -0.571913546816477, 1.3492302785758965, 0.0494632343878712, 0.533884893558711]
 bounds = [(lb[i], ub[i]) for i in range(len(lb))]
 
-fun = SingleDimerCMTLoss(bounds=bounds).to(**tkwargs)
+fun = TwoDimerCMTLoss(bounds=bounds).to(**tkwargs)
 lb, ub = fun.bounds
 dim = fun.dim
 
@@ -60,12 +60,12 @@ def eval_objective(x):
     return fun(unnormalize(x, fun.bounds))
 
 def c1(x):  # The stability constraint, >0 for fixed points
-    return -stability_constraint(x)[0]
+    return -julia_stability_constraint(x)
 
 # We assume c1, c2 have same bounds as the Ackley function above
 def eval_c1(x):
     """This is a helper function we use to unnormalize and evalaute a point"""
-    return -stability_constraint(unnormalize(x, fun.bounds))[0]
+    return -julia_stability_constraint(unnormalize(x, fun.bounds))
 
 
 @dataclass
@@ -183,7 +183,7 @@ def fit_eigenvalues(n_pts=1000, seed=0, save_model=False, model_path='linear_mod
     X_init = sobol.draw(n=n_pts).to(**tkwargs).cpu().numpy()  # Shape: (n_pts, dim)
 
     # 2. Evaluate train_C1
-    train_C1 = np.array([eval_c1(torch.tensor(x)) for x in X_init])  # Shape: (n_pts,)
+    train_C1 = np.array([-eval_c1(torch.tensor(x)) for x in X_init])  # Shape: (n_pts,)
     # print(f"Train eigenvalues: {train_C1}")
 
     # 3. Fit Linear Regression Model
@@ -255,18 +255,28 @@ def get_initial_points(dim, n_pts, seed=0):
 
 
 def physics_informed_initial_points(dim, n_pts, seed=0):
-    model_dict = fit_eigenvalues(n_pts=50, seed=42, save_model=False)
+    print("Start fitting eigenvalues.")
+    model_dict = fit_eigenvalues(n_pts=10, seed=42, save_model=False)
+    print("Eigenvalue fitting complete.")
     sobol = SobolEngine(dimension=dim, scramble=True, seed=seed)
     selected_points = []
     
     while len(selected_points) < n_pts:
         # Generate a batch of points using Sobol
         X_batch = sobol.draw(n=n_pts).to(dtype=dtype, device=device)
-        
-        # Iterate over generated points and apply biased sampling
-        for point in X_batch:
-            prob = predict_normalized(model_dict, point.reshape([1, -1]))  # Get the probability for the point
-            if torch.rand(1).item() < prob:  # Keep the point with probability 'prob'
+
+        # Calculate probabilities for each point in the batch
+        probs = torch.tensor([predict_normalized(model_dict, point.reshape([1, -1])) for point in X_batch])
+
+        # Perform min-max normalization on the batch probabilities
+        min_prob, max_prob = probs.min(), probs.max()
+        normalized_probs = (probs - min_prob) / (max_prob - min_prob + 1e-6)  # Avoid division by zero
+
+        # Iterate over generated points and apply biased sampling with normalized probabilities
+        for point, prob in zip(X_batch, normalized_probs):
+            print(f"Normalized Acceptance prob: {prob.item()}")
+
+            if torch.rand(1).item() < prob.item() ** 2:  # Keep the point with normalized probability
                 selected_points.append(point)
                 if len(selected_points) == n_pts:
                     break
@@ -322,7 +332,9 @@ def opt(n_init=200, physics_informed=True):
     state = ScboState(dim=dim, batch_size=batch_size)
     print(state)
     # Generate initial data
+    print("Sampling initial points.")
     train_X = physics_informed_initial_points(dim, n_init) if physics_informed else get_initial_points(dim, n_init)
+    print("Initial sampling complete.")
     train_Y = torch.tensor([eval_objective(x) for x in train_X], **tkwargs).unsqueeze(-1)
     C1 = torch.tensor([eval_c1(x) for x in train_X], **tkwargs).unsqueeze(-1)
 
@@ -434,7 +446,52 @@ def opt(n_init=200, physics_informed=True):
 # except ValueError as e:
 #     print("Error:", e)
 
-opt(n_init=100)
+# opt(n_init=100)
+
+
+# an20_range = np.linspace(0.5, 1.5, 50)
+# loss_values = []
+# constraint_values = []
+# for an20 in an20_range:
+#     p = torch.tensor([0.9259501468342337, 0.9370383303858767, 0.8556021732489235, 1.147449709932502, -0.6150562496186814, an20, 0.512521117858977, -0.571913546816477, 1.3492302785758965, 0.0494632343878712, 0.533884893558711], dtype=torch.float32)
+#     loss_values.append(fun(p).item())
+#     constraint_values.append(c1(p))
+
+# data = pd.DataFrame({
+#     "an20": an20_range,
+#     "loss_value": loss_values,
+#     "constraint_value": constraint_values
+# })
+
+# # Save DataFrame to a local CSV file
+# file_path = 'an20_loss_constraint_values.csv'
+# data.to_csv(file_path, index=False)
+
+
+
+# X_init = physics_informed_initial_points(11, 5000)
+# X_init = unnormalize(X_init, fun.bounds)
+# reduced_tensor = X_init[:, 5]
+# print(reduced_tensor)
+
+# plt.figure(figsize=(10, 6))
+# plt.hist(reduced_tensor.numpy(), bins=20, edgecolor='black')
+# plt.xlabel("Value")
+# plt.ylabel("Frequency")
+# plt.title("Histogram of Reduced Tensor Values")
+# plt.show()
+
+
+
+model_dict = fit_eigenvalues(n_pts=50, seed=42, save_model=False)
+an20_range = np.linspace(0.5, 1.5, 5)
+prob = []
+for an20 in an20_range:
+    p = torch.tensor([0.9259501468342337, 0.9370383303858767, 0.8556021732489235, 1.147449709932502, -0.6150562496186814, an20, 0.512521117858977, -0.571913546816477, 1.3492302785758965, 0.0494632343878712, 0.533884893558711], dtype=torch.float32)
+    prob.append(predict_normalized(model_dict, p.reshape([1, -1])))
+prob = np.array(prob)
+plt.plot(an20_range, prob)
+plt.show()
 
 
 # Plotting 
@@ -468,3 +525,5 @@ opt(n_init=100)
 # plt.show()
 
 # Biased sampling visualization
+
+

@@ -11,13 +11,13 @@ replication = 50
 # Systen definition
 function sys!(du, u, p, t)
     # Parameters
-    w2, w3, w4, k, an11, an10, an20, bn11, bn10, bn20, nu0, nu1 = p
+    w2, w3, w4, k, an11, an10, an20, bn11, bn10, bn20, nu0 = p
 
     aN1(a1) = an11 * (abs(a1))^2 + an10
     aN2(a2) = an20
     bN1(b1) = bn11 * (abs(b1))^2 + bn10
     bN2(b2) = bn20
-    nu(a2, b1) = nu0 + nu1*abs(a2 - b1)
+    nu(a2, b1) = nu0
 
     a1, a2, b1, b2 = u
     du[1] = im*a1 + aN1(a1)*a1 +im*a2
@@ -26,10 +26,6 @@ function sys!(du, u, p, t)
     du[4] = im*w4*b2 + bN2(b2)*b2 +im*k*b1
 end
 
-# Transform the initial condition in polar coordinates to Cartesian coordinates
-function polar_to_cartesian()
-    pass
-end
 
 # Solve system, returns x solution, time solution, and mean time step
 function solve_sys(p)
@@ -37,8 +33,10 @@ function solve_sys(p)
     # u0 = [range * rand() + im*range * rand(), range * rand() + im*range * rand(), range * rand() + im*range * rand(), range * rand() + im*range * rand()]
     # Fixing initial condition for consistency
     u0 = [0.1 + 0.1*im, 0.1 + 0.1*im, 0.1 + 0.1*im, 0.1 + 0.1*im]
-    # u0 = collect(stability_constraint(p, 2)[2])  # Using the initial condition selection
-    println("Initial condition: " * string(u0))
+    # eigenvalue, init_cond = stability_constraint(p, 2)
+    # println("Eigenvalue: " * string(eigenvalue))
+    # u0 = collect(init_cond)  # Using the initial condition selection
+
     t = 100000.0
     tspan = (0.0, t)
 
@@ -499,7 +497,7 @@ end
 
 function bayesian_objective(x)
     # w2, w3, w4, k, an11, an10, an20, bn11, bn10, bn20, nu0
-    p = (x[1], x[2], x[3], x[4], x[5], x[6], x[7], x[8], x[9], x[10], x[11], 0)
+    p = (x[1], x[2], x[3], x[4], x[5], x[6], x[7], x[8], x[9], x[10], x[11])
     println("Current: " * string(p))
     l, _, _, _, _, _ = objective(p)
     println("Loss: " * string(l))
@@ -626,7 +624,26 @@ function ngspice_opt_warm(num_its)
     return result
 end
 
+if abspath(PROGRAM_FILE) == @__FILE__
+    func = ARGS[1]
+    x = [parse(Float64, ARGS[i]) for i in 2:length(ARGS)]
 
+    local result = nothing
+
+    old_stdout = stdout
+    old_stderr = stderr
+    try
+        redirect_stdout(devnull)
+        redirect_stderr(devnull)
+        result = bayesian_objective(x)
+    finally
+        # Restore stdout and stderr
+        redirect_stdout(old_stdout)
+        redirect_stderr(old_stderr)
+    end
+
+    println(result)
+end
 
 
 

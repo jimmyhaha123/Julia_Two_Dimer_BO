@@ -3,6 +3,7 @@ import numpy as np
 import nlopt
 from autograd import grad
 import autograd.numpy as anp  # autograd-compatible numpy
+import subprocess
 
 def symbolic_jacobian(p, dimer=1, sim_method='cmt'):
     if dimer == 1:
@@ -270,7 +271,16 @@ def stability_constraint(p, dimer=1, sim_method='cmt'):
 # Example usage
 # print(stability_constraint([1, 1, -0.5, 2.88, 0.3]))
 
-p = [1, 1, -0.5, 2.88, 0.3]
+# p = [1, 1, -0.5, 2.88, 0.3]
 # p = [1, 1, 1, 1, -0.5, 2.88, 0.2, -0.5, 2.88, 0.2, 1]
-p = [1, 1.1, 0.9, 1, -1, 0.5, 0.1, -1, 0.4, 0.1, 1]
-print(stability_constraint(p, dimer=2))
+# p = [1, 1.1, 0.9, 1, -1, 0.5, 0.1, -1, 0.4, 0.1, 1]
+# print(stability_constraint(p, dimer=2))
+
+
+# The warpper for the cmt two dimer stability function in julia
+def julia_stability_constraint(p):
+    w2, w3, w4, k, an11, an10, an20, bn11, bn10, bn20, nu0 = p
+    input_args = [str(w2.item()), str(w3.item()), str(w4.item()), str(k.item()), str(an11.item()), str(an10.item()), str(an20.item()), str(bn11.item()), str(bn10.item()), str(bn20.item()), str(nu0.item())]
+    result = subprocess.check_output(["julia", "stability.jl"] + input_args)
+    result = float(result.decode("utf-8").strip())
+    return result

@@ -216,7 +216,8 @@ function stability_constraint(p, dimer=1, sim_method="cmt")
     # println("Eigenvalues List:", eigenvalues_list)
 
     if eigenvalues_list == []
-        return 1.0, convert_cartesian([0.1*rand(), 0.1*rand(), 0.1*rand(), 0.1*rand(), 0.1*rand(), 0.1*rand(), 0.1*rand()])
+        return 1.0
+        # return 1.0, convert_cartesian([0.1*rand(), 0.1*rand(), 0.1*rand(), 0.1*rand(), 0.1*rand(), 0.1*rand(), 0.1*rand()])
     end
     # Flatten the eigenvalues to locate the maximum real part
     flattened_eigenvalues = vcat(eigenvalues_list...)
@@ -232,9 +233,31 @@ function stability_constraint(p, dimer=1, sim_method="cmt")
     # println("Max Eigenvalue:", max_eigenvalue)
     # println("Corresponding Fixed Point:", corresponding_fixed_point)
 
-    return max_eigenvalue, convert_cartesian(corresponding_fixed_point)
+    return max_eigenvalue
+    # return max_eigenvalue, convert_cartesian(corresponding_fixed_point)
 end
 
 # Example usage
 # p = [1, 1.1, 0.9, 1, -1, 0.5, 0.1, -1, 0.4, 0.1, 1]
 # println(stability_constraint(p, 2)[2])
+
+if abspath(PROGRAM_FILE) == @__FILE__
+    func = ARGS[1]
+    x = [parse(Float64, ARGS[i]) for i in 1:length(ARGS)]
+
+    local result = nothing
+
+    old_stdout = stdout
+    old_stderr = stderr
+    try
+        redirect_stdout(devnull)
+        redirect_stderr(devnull)
+        result = stability_constraint(x, 2)
+    finally
+        # Restore stdout and stderr
+        redirect_stdout(old_stdout)
+        redirect_stderr(old_stderr)
+    end
+
+    println(result)
+end
