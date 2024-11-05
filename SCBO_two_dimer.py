@@ -12,6 +12,11 @@ from gpytorch.mlls import ExactMarginalLogLikelihood
 from torch import Tensor
 from torch.quasirandom import SobolEngine
 
+import torch
+import torch.nn as nn
+import torch.optim as optim
+import numpy as np
+
 from botorch.fit import fit_gpytorch_mll
 # Constrained Max Posterior Sampling s a new sampling class, similar to MaxPosteriorSampling,
 # which implements the constrained version of Thompson Sampling described in [1].
@@ -20,7 +25,7 @@ from botorch.models import SingleTaskGP
 from botorch.models.model_list_gp_regression import ModelListGP
 from botorch.models.transforms.outcome import Standardize
 from botorch.test_functions import Ackley
-from botorch.utils.transforms import unnormalize
+from botorch.utils.transforms import normalize, unnormalize
 from loss_functions import *
 from stability import *
 import pandas as pd
@@ -30,6 +35,19 @@ import os
 
 import matplotlib.pyplot as plt
 
+class EigenvalueNet(nn.Module):
+    def __init__(self, input_dim):
+        super(EigenvalueNet, self).__init__()
+        self.net = nn.Sequential(
+            nn.Linear(input_dim, 64),
+            nn.ReLU(),
+            nn.Linear(64, 32),
+            nn.ReLU(),
+            nn.Linear(32, 1)
+        )
+
+    def forward(self, x):
+        return self.net(x).squeeze()
 
 warnings.filterwarnings("ignore")
 
@@ -43,6 +61,7 @@ SMOKE_TEST = os.environ.get("SMOKE_TEST")
 # w2, w3, w4, k, an11, an10, an20, bn11, bn10, bn20, nu0, nu1
 lb = [0.9259501468342337, 0.9370383303858767, 0.8556021732489235, 1.147449709932502, -0.6150562496186814, 0.5, 0.512521117858977, -0.571913546816477, 1.3492302785758965, 0.0494632343878712, 0.533884893558711]
 ub = [0.9259501468342337, 0.9370383303858767, 0.8556021732489235, 1.147449709932502, -0.6150562496186814, 1.5, 0.512521117858977, -0.571913546816477, 1.3492302785758965, 0.0494632343878712, 0.533884893558711]
+ub = [ub[i] + 0.0001 for i in range(11)]
 bounds = [(lb[i], ub[i]) for i in range(len(lb))]
 
 fun = TwoDimerCMTLoss(bounds=bounds).to(**tkwargs)
@@ -164,56 +183,108 @@ def update_state(state, Y_next, C_next):
 
 
 
+def eval_constraint(x):
+    return max(0, -eval_c1(x))
 
-def fit_eigenvalues(n_pts=1000, seed=0, save_model=False, model_path='linear_model.pkl'):
+def fit_eigenvalues(n_pts=50, seed=0, save_model=False, model_path='neural_model.pkl', 
+                    n_epochs=1000, lr=0.001, patience=100, use_dataset=True):
     """
-    Fits a linear regression model and computes theoretical min and max outputs over [0,1]^dim.
+    Fits a neural network model with early stopping and computes theoretical min and max outputs over [0,1]^dim.
     
     Args:
         n_pts (int): Number of Sobol points to generate.
+        dim (int): Input dimensionality.
         seed (int): Seed for reproducibility.
         save_model (bool): Whether to save the model and normalization parameters.
         model_path (str): Path to save the model.
+        n_epochs (int): Maximum number of training epochs for the neural network.
+        lr (float): Learning rate for the optimizer.
+        patience (int): Number of epochs to wait with no improvement on validation loss before stopping.
         
     Returns:
         dict: Contains the fitted model, min_output, and max_output.
     """
-    # 1. Generate Sobol Samples
-    sobol = SobolEngine(dimension=dim, scramble=True, seed=seed)
-    X_init = sobol.draw(n=n_pts).to(**tkwargs).cpu().numpy()  # Shape: (n_pts, dim)
 
-    # 2. Evaluate train_C1
-    train_C1 = np.array([-eval_c1(torch.tensor(x)) for x in X_init])  # Shape: (n_pts,)
-    # print(f"Train eigenvalues: {train_C1}")
 
-    # 3. Fit Linear Regression Model
-    linear_model = LinearRegression()
-    linear_model.fit(X_init, train_C1)
+    if not use_dataset:
+        # 1. Generate Sobol Samples
+        print("Start C1 evaluations. ")
+        sobol = SobolEngine(dimension=dim, scramble=True, seed=seed)
+        X_init = sobol.draw(n=n_pts).to(torch.float32)  # Shape: (n_pts, dim)
 
-    # 4. Compute Theoretical Min and Max Output
-    coefficients = linear_model.coef_
-    intercept = linear_model.intercept_
-    
-    # For each coefficient, choose 0 or 1 to minimize/maximize the output
-    x_min = np.where(coefficients >= 0, 0, 1)
-    x_max = np.where(coefficients >= 0, 1, 0)
-    
-    min_output = intercept + np.dot(coefficients, x_min)
-    max_output = intercept + np.dot(coefficients, x_max)
-    
+        # 2. Evaluate train_C1
+        train_C1 = np.array([eval_constraint(torch.tensor(x, dtype=torch.float32)) for x in X_init.numpy()])  # Shape: (n_pts,)
+        train_C1 = torch.tensor(train_C1, dtype=torch.float32)
+        print("C1 evaluations complete. ")
+    else:
+        data = pd.read_csv('eigenvalues_data.csv')
+        X_init = torch.tensor(data.iloc[:, :-1].values, dtype=torch.float32)  # All columns except 'train_C1'
+        train_C1 = torch.tensor(data['train_C1'].values, dtype=torch.float32)
+
+    # Split into training and validation sets
+    val_split = int(0.8 * len(X_init))  # Use the length of X_init instead of n_pts
+
+    # Split into training and validation sets
+    X_train, X_val = X_init[:val_split], X_init[val_split:]
+    y_train, y_val = train_C1[:val_split], train_C1[val_split:]
+
+    # 3. Initialize Neural Network Model
+    model = EigenvalueNet(input_dim=dim)
+    optimizer = optim.Adam(model.parameters(), lr=lr)
+    loss_fn = nn.MSELoss()
+
+    # 4. Train Neural Network Model with Early Stopping
+    best_val_loss = float('inf')
+    patience_counter = 0
+
+    for epoch in range(n_epochs):
+        print(f"Epoch {epoch}")
+        model.train()
+        optimizer.zero_grad()
+        train_predictions = model(X_train)
+        train_loss = loss_fn(train_predictions, y_train)
+        train_loss.backward()
+        optimizer.step()
+
+        # Evaluate on validation set
+        model.eval()
+        with torch.no_grad():
+            val_predictions = model(X_val)
+            val_loss = loss_fn(val_predictions, y_val).item()
+
+        # Early stopping check\
+        print(f"Val loss: {val_loss}")
+        if val_loss < best_val_loss:
+            best_val_loss = val_loss
+            patience_counter = 0
+            best_model_state = model.state_dict()  # Save the best model
+        else:
+            patience_counter += 1
+            if patience_counter >= patience:
+                print(f"Early stopping at epoch {epoch + 1}")
+                model.load_state_dict(best_model_state)  # Restore best model
+                break
+
+    print("Training complete. ")
+    # 5. Compute Theoretical Min and Max Output
+    model.eval()
+    with torch.no_grad():
+        # Evaluating at corners of [0, 1]^dim to get min and max possible values
+        corners = torch.tensor(np.array(np.meshgrid(*[[0, 1]] * dim)).T.reshape(-1, dim), dtype=torch.float32)
+        corner_outputs = model(corners)
+        min_output = corner_outputs.min().item()
+        max_output = corner_outputs.max().item()
+
     if max_output - min_output == 0:
         raise ValueError("Theoretical max and min outputs are equal; cannot perform normalization.")
-    
-    # print(f"Theoretical Minimum Output: {min_output}")
-    # print(f"Theoretical Maximum Output: {max_output}")
-
-    # 5. Save Model and Normalization Parameters if Required
+    print("Normalization complete. Eigenvalue model training complete.")
+    # 6. Save Model and Normalization Parameters if Required
     if save_model:
         with open(model_path, 'wb') as f:
-            pickle.dump({'model': linear_model, 'min_output': min_output, 'max_output': max_output}, f)
+            pickle.dump({'model': model.state_dict(), 'min_output': min_output, 'max_output': max_output}, f)
         print(f"Model saved to {model_path}")
 
-    return {'model': linear_model, 'min_output': min_output, 'max_output': max_output}
+    return {'model': model.state_dict(), 'min_output': min_output, 'max_output': max_output, 'X_init':X_init, 'train_C1':train_C1}
 
 def predict_normalized(model_dict, X_new):
     """
@@ -229,12 +300,15 @@ def predict_normalized(model_dict, X_new):
     Raises:
         ValueError: If any prediction is outside the [0, 1] range.
     """
-    linear_model = model_dict['model']
+    model = EigenvalueNet(input_dim=X_new.shape[1])
+    model.load_state_dict(model_dict['model'])
+    model.eval()
+    
     min_output = model_dict['min_output']
     max_output = model_dict['max_output']
-    
-    X_new_np = X_new.to(**tkwargs).cpu().numpy()
-    predictions = linear_model.predict(X_new_np)
+
+    with torch.no_grad():
+        predictions = model(X_new).numpy()
     
     # Min-Max Normalization
     predictions_normalized = (predictions - min_output) / (max_output - min_output)
@@ -255,18 +329,19 @@ def get_initial_points(dim, n_pts, seed=0):
 
 
 def physics_informed_initial_points(dim, n_pts, seed=0):
-    print("Start fitting eigenvalues.")
-    model_dict = fit_eigenvalues(n_pts=10, seed=42, save_model=False)
-    print("Eigenvalue fitting complete.")
+    model_dict = fit_eigenvalues()
+    model = EigenvalueNet(input_dim=model_dict['X_init'].shape[1])
+    model.load_state_dict(model_dict['model'])
+    model.eval()
     sobol = SobolEngine(dimension=dim, scramble=True, seed=seed)
     selected_points = []
     
     while len(selected_points) < n_pts:
         # Generate a batch of points using Sobol
-        X_batch = sobol.draw(n=n_pts).to(dtype=dtype, device=device)
+        X_batch = sobol.draw(n=n_pts).to(dtype=torch.float32)
 
-        # Calculate probabilities for each point in the batch
-        probs = torch.tensor([predict_normalized(model_dict, point.reshape([1, -1])) for point in X_batch])
+        with torch.no_grad():
+            probs = model(X_batch).cpu()
 
         # Perform min-max normalization on the batch probabilities
         min_prob, max_prob = probs.min(), probs.max()
@@ -274,9 +349,9 @@ def physics_informed_initial_points(dim, n_pts, seed=0):
 
         # Iterate over generated points and apply biased sampling with normalized probabilities
         for point, prob in zip(X_batch, normalized_probs):
-            print(f"Normalized Acceptance prob: {prob.item()}")
+            # print(f"Normalized Acceptance prob: {prob.item()}")
 
-            if torch.rand(1).item() < prob.item() ** 2:  # Keep the point with normalized probability
+            if torch.rand(1).item() < prob.item():  # Keep the point with normalized probability
                 selected_points.append(point)
                 if len(selected_points) == n_pts:
                     break
@@ -469,29 +544,29 @@ def opt(n_init=200, physics_informed=True):
 
 
 
-# X_init = physics_informed_initial_points(11, 5000)
-# X_init = unnormalize(X_init, fun.bounds)
-# reduced_tensor = X_init[:, 5]
+X_init = physics_informed_initial_points(11, 5000)
+X_init = unnormalize(X_init, fun.bounds)
+reduced_tensor = X_init[:, 5]
 # print(reduced_tensor)
 
-# plt.figure(figsize=(10, 6))
-# plt.hist(reduced_tensor.numpy(), bins=20, edgecolor='black')
-# plt.xlabel("Value")
-# plt.ylabel("Frequency")
-# plt.title("Histogram of Reduced Tensor Values")
-# plt.show()
-
-
-
-model_dict = fit_eigenvalues(n_pts=50, seed=42, save_model=False)
-an20_range = np.linspace(0.5, 1.5, 5)
-prob = []
-for an20 in an20_range:
-    p = torch.tensor([0.9259501468342337, 0.9370383303858767, 0.8556021732489235, 1.147449709932502, -0.6150562496186814, an20, 0.512521117858977, -0.571913546816477, 1.3492302785758965, 0.0494632343878712, 0.533884893558711], dtype=torch.float32)
-    prob.append(predict_normalized(model_dict, p.reshape([1, -1])))
-prob = np.array(prob)
-plt.plot(an20_range, prob)
+plt.figure(figsize=(10, 6))
+plt.hist(reduced_tensor.numpy(), bins=20, edgecolor='black')
+plt.xlabel("Value")
+plt.ylabel("Frequency")
+plt.title("Histogram of Reduced Tensor Values")
 plt.show()
+
+
+
+# model_dict = fit_eigenvalues(n_pts=50, seed=42, save_model=False)
+# an20_range = np.linspace(0.5, 1.5, 5)
+# prob = []
+# for an20 in an20_range:
+#     p = torch.tensor([0.9259501468342337, 0.9370383303858767, 0.8556021732489235, 1.147449709932502, -0.6150562496186814, an20, 0.512521117858977, -0.571913546816477, 1.3492302785758965, 0.0494632343878712, 0.533884893558711], dtype=torch.float32)
+#     prob.append(predict_normalized(model_dict, p.reshape([1, -1])))
+# prob = np.array(prob)
+# plt.plot(an20_range, prob)
+# plt.show()
 
 
 # Plotting 
@@ -524,6 +599,105 @@ plt.show()
 # plt.plot(df["n20"], df["loss"])
 # plt.show()
 
-# Biased sampling visualization
+# Neural network eigenvalue fitting testing code
+# def plot_training_and_model(model_dict):
+#     """
+#     Plots the training points and the fitted model predictions for visualization.
+    
+#     Args:
+#         model_dict (dict): Dictionary containing the trained model, min_output, max_output, X_init, and train_C1.
+#     """
+#     # Unpack model and training data
+#     model = EigenvalueNet(input_dim=model_dict['X_init'].shape[1])
+#     model.load_state_dict(model_dict['model'])
+#     model.eval()
+#     X_train = model_dict['X_init']
+#     y_train = model_dict['train_C1']
+
+#     # Unnormalize x[5] for training data
+#     x5_train = X_train[:, 5] * (1.5 - 0.5) + 0.5
+
+#     # Plot the training data with unnormalized x[5]
+#     plt.scatter(x5_train.cpu(), y_train.cpu(), color='blue', label='Training Data', alpha=0.6)
+
+#     # Generate normalized x[5] values from 0 to 1 for model evaluation
+#     x5_range_normalized = torch.linspace(0, 1, 100).unsqueeze(1).to(X_train.device)
+#     X_fixed = X_train[0].repeat(100, 1)  # Use the first training sample as a template
+#     X_fixed[:, 5] = x5_range_normalized.squeeze()  # Vary only x[5] for evaluation
+
+#     # Predict using the fitted model
+#     with torch.no_grad():
+#         y_model = model(X_fixed).cpu()
+
+#     # Unnormalize x5 for plotting purposes
+#     x5_range_unnormalized = x5_range_normalized * (1.5 - 0.5) + 0.5
+
+#     # Plot the fitted model predictions
+#     plt.plot(x5_range_unnormalized.cpu(), y_model, color='red', label='Fitted Model')
+
+#     # Formatting the plot
+#     plt.xlabel('x[5] (6th Entry, Unnormalized)')
+#     plt.ylabel('Output')
+#     plt.title('Training Data and Fitted Model')
+#     plt.legend()
+#     plt.show()
+
+# # Set up parameters for training
+# n_pts = 1000
+# seed = 0
+# n_epochs = 1000
+# lr = 0.001
+# patience = 100
+
+# # Train the model and obtain training data and model parameters
+# model_dict = fit_eigenvalues(n_pts=n_pts, seed=seed, n_epochs=n_epochs, lr=lr, patience=patience, use_dataset=True)
+
+# # Call plot function with trained model dictionary
+# plot_training_and_model(model_dict)
+
+
+
+
+
+# Generating dataset for C1 (in the 1d domain that only an10 varies from 0.5 to 1.5)
+# sobol = SobolEngine(dimension=dim, scramble=True)
+# X_init = sobol.draw(n=300).to(torch.float32)  # Shape: (n_pts, dim)
+
+# # 2. Evaluate train_C1
+# train_C1 = np.array([eval_constraint(torch.tensor(x, dtype=torch.float32)) for x in X_init.numpy()])
+# train_C1 = torch.tensor(train_C1, dtype=torch.float32)
+
+# X_init_np = X_init.cpu().numpy()
+# train_C1_np = train_C1.cpu().numpy()
+
+# # Combine X_init and train_C1 into a single DataFrame
+# data = pd.DataFrame(X_init_np, columns=[f'x{i}' for i in range(X_init_np.shape[1])])
+# data['train_C1'] = train_C1_np
+
+# # Save to CSV
+# data.to_csv('eigenvalues_data.csv', index=False)
+# print("Data saved to 'eigenvalues_data.csv'")
+
+
+
+# Generating dataset for fun
+# sobol = SobolEngine(dimension=dim, scramble=True)
+# X_init = sobol.draw(n=200).to(torch.float32)  # Shape: (n_pts, dim)
+
+# # 2. Evaluate train_C1
+# train_fun = np.array([eval_objective(torch.tensor(x, dtype=torch.float32)) for x in X_init.numpy()])
+# train_fun = torch.tensor(train_fun, dtype=torch.float32)
+
+# X_init_np = X_init.cpu().numpy()
+# train_fun_np = train_fun.cpu().numpy()
+
+# # Combine X_init and train_C1 into a single DataFrame
+# data = pd.DataFrame(X_init_np, columns=[f'x{i}' for i in range(X_init_np.shape[1])])
+# data['train_fun'] = train_fun_np
+
+# # Save to CSV
+# data.to_csv('fun_data.csv', index=False)
+# print("Data saved to 'fun_data.csv'")
+
 
 

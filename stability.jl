@@ -216,7 +216,7 @@ function stability_constraint(p, dimer=1, sim_method="cmt")
     # println("Eigenvalues List:", eigenvalues_list)
 
     if eigenvalues_list == []
-        return 1.0
+        return 1.5
         # return 1.0, convert_cartesian([0.1*rand(), 0.1*rand(), 0.1*rand(), 0.1*rand(), 0.1*rand(), 0.1*rand(), 0.1*rand()])
     end
     # Flatten the eigenvalues to locate the maximum real part
