@@ -544,17 +544,17 @@ def opt(n_init=200, physics_informed=True):
 
 
 
-X_init = physics_informed_initial_points(11, 5000)
-X_init = unnormalize(X_init, fun.bounds)
-reduced_tensor = X_init[:, 5]
-# print(reduced_tensor)
+# X_init = physics_informed_initial_points(11, 5000)
+# X_init = unnormalize(X_init, fun.bounds)
+# reduced_tensor = X_init[:, 5]
+# # print(reduced_tensor)
 
-plt.figure(figsize=(10, 6))
-plt.hist(reduced_tensor.numpy(), bins=20, edgecolor='black')
-plt.xlabel("Value")
-plt.ylabel("Frequency")
-plt.title("Histogram of Reduced Tensor Values")
-plt.show()
+# plt.figure(figsize=(10, 6))
+# plt.hist(reduced_tensor.numpy(), bins=20, edgecolor='black')
+# plt.xlabel("Value")
+# plt.ylabel("Frequency")
+# plt.title("Histogram of Reduced Tensor Values")
+# plt.show()
 
 
 
@@ -657,8 +657,6 @@ plt.show()
 
 
 
-
-
 # Generating dataset for C1 (in the 1d domain that only an10 varies from 0.5 to 1.5)
 # sobol = SobolEngine(dimension=dim, scramble=True)
 # X_init = sobol.draw(n=300).to(torch.float32)  # Shape: (n_pts, dim)
@@ -681,23 +679,23 @@ plt.show()
 
 
 # Generating dataset for fun
-# sobol = SobolEngine(dimension=dim, scramble=True)
-# X_init = sobol.draw(n=200).to(torch.float32)  # Shape: (n_pts, dim)
+sobol = SobolEngine(dimension=dim, scramble=True)
+X_init = sobol.draw(n=3).to(torch.float32)  # Shape: (n_pts, dim)
 
-# # 2. Evaluate train_C1
-# train_fun = np.array([eval_objective(torch.tensor(x, dtype=torch.float32)) for x in X_init.numpy()])
-# train_fun = torch.tensor(train_fun, dtype=torch.float32)
+# 2. Evaluate fun
+train_fun = np.array([eval_objective(torch.tensor(x, dtype=torch.float32)) for x in X_init.numpy()])
+train_fun = torch.tensor(train_fun, dtype=torch.float32)
 
-# X_init_np = X_init.cpu().numpy()
-# train_fun_np = train_fun.cpu().numpy()
+X_init_np = X_init.cpu().numpy()
+train_fun_np = train_fun.cpu().numpy()
 
-# # Combine X_init and train_C1 into a single DataFrame
-# data = pd.DataFrame(X_init_np, columns=[f'x{i}' for i in range(X_init_np.shape[1])])
-# data['train_fun'] = train_fun_np
+# Combine X_init and train_C1 into a single DataFrame
+data = pd.DataFrame(X_init_np, columns=[f'x{i}' for i in range(X_init_np.shape[1])])
+data['train_fun'] = train_fun_np
 
-# # Save to CSV
-# data.to_csv('fun_data.csv', index=False)
-# print("Data saved to 'fun_data.csv'")
+# Save to CSV
+data.to_csv('fun_data.csv', index=False)
+print("Data saved to 'fun_data.csv'")
 
 
 
