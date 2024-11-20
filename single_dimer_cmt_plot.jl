@@ -5,7 +5,7 @@ pushfirst!(PyVector(pyimport("sys")."path"), "C:/Users/msq3658/Desktop/Julia_Two
 @pyimport stability
 
 p = [1.4, 1, -0.5, 2.88, 0.25]
-# p = [1, 1, -0.5, 2.88, 0.3]
+p = [1, 1, -0.5, 2.88, 0.3]
 min_loss, mag_transform, freqs, tseries, t_interp, _ = objective(p, true, (0, 1e6))
 println(min_loss)
 eigenvalue = stability.stability_constraint(p)
