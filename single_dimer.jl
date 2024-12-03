@@ -6,7 +6,7 @@ using Base: redirect_stdout
 num = 40
 min = 0
 replication = 50
-noise = true
+noise = false
 
 # Systen definition
 function sys!(du, u, p, t)

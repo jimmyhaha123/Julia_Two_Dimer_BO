@@ -1,48 +1,50 @@
-import sympy as sp
+import matplotlib.pyplot as plt
+import numpy as np
 
-def compute_jacobian_dimer1():
-    # Define symbols for parameters
-    w2, k, n11, n10, n20 = sp.symbols('w2 k n11 n10 n20')
-    I1, I2, theta = sp.symbols('I1 I2 theta')
+def piecewise_plot(partitions, behaviors):
+    """
+    Plot a piecewise function based on specified partitions and behaviors.
+    
+    :param partitions: List of tuples specifying the intervals [(start1, end1), (start2, end2), ...]
+    :param behaviors: List of behaviors for each interval ("constant" or "slope").
+                      For "slope", the slope of 2 is applied.
+    """
+    if len(partitions) != len(behaviors):
+        raise ValueError("Each partition must have a corresponding behavior.")
+    
+    x_values = []
+    y_values = []
+    
+    # Initialize starting x and y
+    x_start = partitions[0][0]
+    y_start = 6
+    
+    for i, (start, end) in enumerate(partitions):
+        x = np.linspace(start, end, 100)
+        if behaviors[i] == "constant":
+            y = np.full_like(x, y_start)
+        elif behaviors[i] == "slope":
+            y = y_start + 2 * (x - start)
+        else:
+            raise ValueError(f"Invalid behavior: {behaviors[i]}. Use 'constant' or 'slope'.")
+        
+        x_values.extend(x)
+        y_values.extend(y)
+        y_start = y[-1]  # Update y_start for the next partition
+    
+    # Plot the piecewise function
+    plt.figure(figsize=(10, 6))
+    plt.plot(x_values, y_values)
+    plt.xlabel("time")
+    plt.ylabel("Collision point (x)")
+    plt.ylim(0, 30)
+    plt.title("Collision point vs t")
+    plt.grid()
+    plt.legend()
+    plt.show()
 
-    # Define the equations
-    eq1 = 2 * n11 * I1**2 + 2 * k * n10 * I1 + 2 * sp.sqrt(I1 * I2) * sp.sin(theta)
-    eq2 = 2 * n20 * I2 - 2 * k * sp.sqrt(I1 * I2) * sp.sin(theta)
-    eq3 = (1 - w2) + k * (sp.sqrt(I2 / I1) - sp.sqrt(I1 / I2)) * sp.cos(theta)
+# Example Usage
+partitions = [(100, 280.4), (280.4, 282.8), (282.8, 307.9), (307.9, 346)]
+behaviors = ["constant", "slope", "constant", "slope"]
 
-    # Construct the system and compute the Jacobian
-    system = sp.Matrix([eq1, eq2, eq3])
-    variables = sp.Matrix([I1, I2, theta])
-    jacobian_matrix = system.jacobian(variables)
-
-    return jacobian_matrix
-
-def compute_jacobian_dimer2():
-    # Define symbols for parameters
-    w2, w3, w4, k, an11, an10, an20, bn11, bn10, bn20, v = sp.symbols('w2 w3 w4 k an11 an10 an20 bn11 bn10 bn20 v')
-    I1, I2, I3, I4, theta1, theta2, theta3 = sp.symbols('I1 I2 I3 I4 theta1 theta2 theta3')
-
-    # Define the equations
-    eq1 = 2 * (an11 * I1 + an10) * I1 + 2 * sp.sqrt(I1 * I2) * sp.sin(theta1)
-    eq2 = 2 * an20 * I2 - 2 * sp.sqrt(I1 * I2) * sp.sin(theta1) + 2 * v * sp.sqrt(I2 * I3) * sp.sin(theta2)
-    eq3 = 2 * (bn11 * I3 + bn10) * I3 - 2 * v * sp.sqrt(I2 * I3) * sp.sin(theta2) + 2 * k * sp.sqrt(I3 * I4) * sp.sin(theta3)
-    eq4 = 2 * bn20 * I4 - 2 * k * sp.sqrt(I3 * I4) * sp.sin(theta3)
-    eq5 = (1 - w2) + (sp.sqrt(I2 / I1) - sp.sqrt(I1 / I2)) * sp.cos(theta1) - v * (sp.sqrt(I3 / I2)) * sp.cos(theta2)
-    eq6 = (w2 - w3) + (v * (sp.sqrt(I3 / I2) - sp.sqrt(I2 / I3))) * sp.cos(theta2) + (sp.sqrt(I1 / I2)) * sp.cos(theta1) - k * (sp.sqrt(I4 / I3)) * sp.cos(theta3)
-    eq7 = (w3 - w4) + (k * (sp.sqrt(I4 / I3) - sp.sqrt(I3 / I4))) * sp.cos(theta3) + v * (sp.sqrt(I2 / I3)) * sp.cos(theta2)
-
-    # Construct the system and compute the Jacobian
-    system = sp.Matrix([eq1, eq2, eq3, eq4, eq5, eq6, eq7])
-    variables = sp.Matrix([I1, I2, I3, I4, theta1, theta2, theta3])
-    jacobian_matrix = system.jacobian(variables)
-
-    return jacobian_matrix
-
-# Print the Jacobians
-jacobian_dimer1 = compute_jacobian_dimer1()
-print("Jacobian Matrix for dimer == 1:")
-print(jacobian_dimer1)
-
-jacobian_dimer2 = compute_jacobian_dimer2()
-print("\nJacobian Matrix for dimer == 2:")
-print(jacobian_dimer2)
+piecewise_plot(partitions, behaviors)

@@ -1,3 +1,3 @@
 include("two_dimer.jl")
 
-ngspice_opt_warm(3000)
+ngspice_opt_warm(5)

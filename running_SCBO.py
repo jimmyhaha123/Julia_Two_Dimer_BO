@@ -66,8 +66,9 @@ def generate_fun_value(n_pts=100):
     data['train_fun'] = train_fun_np
 
     # Save to CSV
-    data.to_csv('datasets/fun_data.csv', index=False)
-    print("Data saved to 'fun_data.csv'")
+    file_name = 'fun_data_fp.csv'
+    data.to_csv(f'datasets/{file_name}', index=False)
+    print(f"Data saved to '{file_name}'")
 
 def visualize_biased_sampling():
     X_init = physics_informed_initial_points(11, 5000)
@@ -125,6 +126,26 @@ def optimization_comparison(num_trials=10, n_init=15, max_its=4):
     plt.show()
 
     print(f"Plot saved to {file_name}")
+
+def generate_eigenvalues(n_pts=100):
+    sobol = SobolEngine(dimension=dim, scramble=True)
+    X_init = sobol.draw(n=n_pts).to(**tkwargs)  # Shape: (n_pts, dim)
+
+    # 2. Evaluate fun
+    train_C1 = np.array([-eval_c1(torch.tensor(x, **tkwargs)) for x in X_init.numpy()])
+    train_C1 = torch.tensor(train_C1, **tkwargs)
+
+    X_init_np = X_init.cpu().numpy()
+    train_fun_np = train_C1.cpu().numpy()
+
+    # Combine X_init and train_C1 into a single DataFrame
+    data = pd.DataFrame(X_init_np, columns=[f'x{i}' for i in range(X_init_np.shape[1])])
+    data['train_C1'] = train_fun_np
+
+    # Save to CSV
+    file_name = 'eigenvalues_data_multiple.csv'
+    data.to_csv(f'datasets/{file_name}', index=False)
+    print(f'datasets/{file_name}')
 
 
 

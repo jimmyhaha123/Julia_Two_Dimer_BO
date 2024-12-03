@@ -182,7 +182,7 @@ function jacobian_eigenvalues(p, dimer=1, sim_method="cmt")
     return eigenvalues_list, fixed_points
 end
 
-function stability_constraint(p, dimer=1, sim_method="cmt")
+function stability_constraint(p, dimer=1, sim_method="cmt", multiple_eig=true)
     function convert_cartesian(x)
         if dimer == 2
             I1, I2, I3, I4, theta1, theta2, theta3 = x
@@ -216,7 +216,11 @@ function stability_constraint(p, dimer=1, sim_method="cmt")
     # println("Eigenvalues List:", eigenvalues_list)
 
     if eigenvalues_list == []
-        return 1.5
+        if multiple_eig
+            return 3
+        else
+            return 1.5
+        end
         # return 1.0, convert_cartesian([0.1*rand(), 0.1*rand(), 0.1*rand(), 0.1*rand(), 0.1*rand(), 0.1*rand(), 0.1*rand()])
     end
     # Flatten the eigenvalues to locate the maximum real part
@@ -224,17 +228,68 @@ function stability_constraint(p, dimer=1, sim_method="cmt")
     # println("Flattened Eigenvalues:", flattened_eigenvalues)
 
     # Find the maximum real part of the eigenvalues
-    max_eigenvalue = maximum(real(flattened_eigenvalues))
+    if ~multiple_eig
+        result = maximum(real(flattened_eigenvalues))
+    else
+        result = sum(real(eig) for eig in flattened_eigenvalues if real(eig) > 0)
+    end
 
     # Locate the sublist that contains the max eigenvalue
-    sublist_index = findfirst(x -> max_eigenvalue in real.(x), eigenvalues_list)
-    corresponding_fixed_point = fixed_points[sublist_index][1]  # Get the fixed point for that sublist
+    # sublist_index = findfirst(x -> max_eigenvalue in real.(x), eigenvalues_list)
+    # corresponding_fixed_point = fixed_points[sublist_index][1]  # Get the fixed point for that sublist
 
     # println("Max Eigenvalue:", max_eigenvalue)
     # println("Corresponding Fixed Point:", corresponding_fixed_point)
 
-    return max_eigenvalue
-    # return max_eigenvalue, convert_cartesian(corresponding_fixed_point)
+    return result
+    # return result, convert_cartesian(corresponding_fixed_point)
+end
+
+function get_max_fixed_point(p, dimer=2, sim_method="cmt")
+    function convert_cartesian(x)
+        if dimer == 2
+            I1, I2, I3, I4, theta1, theta2, theta3 = x
+            # Calculate the phases
+            phi1 = 0
+            phi2 = phi1 - theta1
+            phi3 = phi2 - theta2
+            phi4 = phi3 - theta3
+            # Convert to complex Cartesian coordinates
+            a1 = sqrt(I1) * exp(im * phi1)
+            a2 = sqrt(I2) * exp(im * phi2)
+            b1 = sqrt(I3) * exp(im * phi3)
+            b2 = sqrt(I4) * exp(im * phi4)
+            return [a1, a2, b1, b2]
+        elseif dimer == 1
+            I1, I2, theta = x
+            # Define initial phases
+            phi1 = 0
+            phi2 = theta
+            # Convert to complex Cartesian coordinates
+            a1 = sqrt(I1) * exp(im * phi1)
+            a2 = sqrt(I2) * exp(im * phi2)
+            return [a1, a2]
+        else
+            error("Invalid dimer value; only dimer == 1 or dimer == 2 are supported.")
+        end
+    end
+
+    # Compute the Jacobian eigenvalues for all fixed points
+    eigenvalues_list, fixed_points = jacobian_eigenvalues(p, dimer, sim_method)
+    # println("Eigenvalues List:", eigenvalues_list)
+
+    if eigenvalues_list == []
+        return [0.1 + 0.1*im, 0.1 + 0.1*im, 0.1 + 0.1*im, 0.1 + 0.1*im]
+        # return 1.0, convert_cartesian([0.1*rand(), 0.1*rand(), 0.1*rand(), 0.1*rand(), 0.1*rand(), 0.1*rand(), 0.1*rand()])
+    end
+    # Flatten the eigenvalues to locate the maximum real part
+    flattened_eigenvalues = vcat(eigenvalues_list...)
+    max_eigenvalue = maximum(real(flattened_eigenvalues))
+    sublist_index = findfirst(x -> max_eigenvalue in real.(x), eigenvalues_list)
+    corresponding_fixed_point = fixed_points[sublist_index][1]  # Get the fixed point for that sublist
+    result = convert_cartesian(corresponding_fixed_point)
+    rounded_result = [complex(round(real(x), digits=3), round(imag(x), digits=3)) for x in result]
+    return rounded_result
 end
 
 # Example usage
