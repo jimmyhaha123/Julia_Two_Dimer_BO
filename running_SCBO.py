@@ -21,7 +21,7 @@ def visualize_fun_and_eig():
     # Extract training data
     X_train = model_dict['X_init']
     y_train = model_dict['train_C1']
-    y_model = predict_normalized(model_dict, X_train)
+    y_model = predict_normalized(model_dict, X_train, hyperparameter=0.6)
     X_train = X_train[:, 5]
 
     
@@ -87,7 +87,7 @@ def optimization_comparison(num_trials=10, n_init=15, max_its=4):
         all_loss_histories = []
         for trial in range(num_trials):
             print(f"Running trial {trial + 1} with physics_informed={physics_informed}")
-            best_loss_history, _, best_loss, best_X = opt(
+            best_loss_history, _, best_loss, best_X = opt_v2(
                 n_init=n_init, max_its=max_its, physics_informed=physics_informed
             )
             all_loss_histories.append(best_loss_history)
@@ -143,10 +143,10 @@ def generate_eigenvalues(n_pts=100):
     data['train_C1'] = train_fun_np
 
     # Save to CSV
-    file_name = 'eigenvalues_data_multiple.csv'
+    file_name = 'eigenvalues_data_domain2.csv'
     data.to_csv(f'datasets/{file_name}', index=False)
     print(f'datasets/{file_name}')
 
 
 
-visualize_fun_and_eig()
+optimization_comparison(num_trials=1, n_init=2, max_its=2)

@@ -182,7 +182,7 @@ function jacobian_eigenvalues(p, dimer=1, sim_method="cmt")
     return eigenvalues_list, fixed_points
 end
 
-function stability_constraint(p, dimer=1, sim_method="cmt", multiple_eig=true)
+function stability_constraint(p, dimer=1, sim_method="cmt", multiple_eig=false)
     function convert_cartesian(x)
         if dimer == 2
             I1, I2, I3, I4, theta1, theta2, theta3 = x
@@ -217,7 +217,7 @@ function stability_constraint(p, dimer=1, sim_method="cmt", multiple_eig=true)
 
     if eigenvalues_list == []
         if multiple_eig
-            return 3
+            return 10
         else
             return 1.5
         end

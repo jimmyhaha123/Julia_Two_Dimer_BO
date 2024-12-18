@@ -20,6 +20,7 @@ import numpy as np
 from scipy.stats import norm
 
 from botorch.fit import fit_gpytorch_mll
+from botorch.acquisition import ExpectedImprovement
 # Constrained Max Posterior Sampling s a new sampling class, similar to MaxPosteriorSampling,
 # which implements the constrained version of Thompson Sampling described in [1].
 from botorch.generation.sampling import ConstrainedMaxPosteriorSampling
@@ -28,6 +29,7 @@ from botorch.models.model_list_gp_regression import ModelListGP
 from botorch.models.transforms.outcome import Standardize
 from botorch.test_functions import Ackley
 from botorch.utils.transforms import normalize, unnormalize
+from botorch.optim.optimize import optimize_acqf
 from loss_functions import *
 from stability import *
 import pandas as pd
@@ -53,7 +55,7 @@ class EigenvalueNet(nn.Module):
 
 warnings.filterwarnings("ignore")
 
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+# device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 device = torch.device("cpu")
 dtype = torch.double
 tkwargs = {"device": device, "dtype": dtype}
@@ -63,6 +65,9 @@ SMOKE_TEST = os.environ.get("SMOKE_TEST")
 # w2, w3, w4, k, an11, an10, an20, bn11, bn10, bn20, nu0, nu1
 lb = [0.9259501468342337, 0.9370383303858767, 0.8556021732489235, 1.147449709932502, -0.6150562496186814, 0.5, 0.512521117858977, -0.571913546816477, 1.3492302785758965, 0.0494632343878712, 0.533884893558711]
 ub = [0.9259501468342337, 0.9370383303858767, 0.8556021732489235, 1.147449709932502, -0.6150562496186814, 1.5, 0.512521117858977, -0.571913546816477, 1.3492302785758965, 0.0494632343878712, 0.533884893558711]
+
+lb = [0.9259501468342337, 0.9370383303858767, 0.8556021732489235, 1.147449709932502, -0.6150562496186814, 0.5, 0.0, -0.571913546816477, 0.5, 0.0, 0.533884893558711]
+ub = [0.9259501468342337, 0.9370383303858767, 0.8556021732489235, 1.147449709932502, -0.6150562496186814, 1.5, 1.0, -0.571913546816477, 0.5, 1.0, 0.533884893558711]
 ub = [ub[i] + 0.0001 for i in range(11)]
 bounds = [(lb[i], ub[i]) for i in range(len(lb))]
 
@@ -71,7 +76,7 @@ lb, ub = fun.bounds
 dim = fun.dim
 
 
-batch_size = 2
+batch_size = 1
 max_cholesky_size = float("inf")  # Always use Cholesky
 
 # When evaluating the function, we must first unnormalize the inputs since
@@ -219,7 +224,7 @@ def fit_eigenvalues(n_pts=50, seed=0, save_model=False, model_path='neural_model
         train_C1 = torch.tensor(train_C1, dtype=torch.float32)
         print("C1 evaluations complete. ")
     else:
-        data = pd.read_csv('datasets/eigenvalues_data.csv')
+        data = pd.read_csv('datasets/eigenvalues_data_domain1.csv')
         X_init = torch.tensor(data.iloc[:, :-1].values, dtype=torch.float32)  # All columns except 'train_C1'
         train_C1 = torch.tensor(data['train_C1'].values, dtype=torch.float32)
 
@@ -288,7 +293,7 @@ def fit_eigenvalues(n_pts=50, seed=0, save_model=False, model_path='neural_model
 
     return {'model': model.state_dict(), 'min_output': min_output, 'max_output': max_output, 'X_init':X_init, 'train_C1':train_C1}
 
-def predict_normalized(model_dict, X_new):
+def predict_normalized(model_dict, X_new, hyperparameter):
     """
     Makes normalized predictions ensuring outputs are within [0, 1].
     
@@ -306,16 +311,16 @@ def predict_normalized(model_dict, X_new):
     model.load_state_dict(model_dict['model'])
     model.eval()
     
-    min_output = model_dict['min_output']
-    max_output = model_dict['max_output']
+    # min_output = model_dict['min_output']
+    # max_output = model_dict['max_output']
 
     with torch.no_grad():
         predictions = model(X_new)
 
     def mapping_to_prob(x):
-        dist = torch.distributions.Normal(loc=0.6, scale=0.1)
+        dist = torch.distributions.Normal(loc=hyperparameter, scale=0.1)
         zeros = torch.zeros_like(x)
-        max_prob = dist.log_prob(torch.tensor(0.6)).exp()  # Maximum at the mean
+        max_prob = dist.log_prob(torch.tensor(hyperparameter)).exp()  # Maximum at the mean
         probs = torch.where(x <= 0, zeros, dist.log_prob(x).exp() / max_prob)
         return probs
     
@@ -333,7 +338,7 @@ def get_initial_points(dim, n_pts, seed=0):
     return X_init
 
 
-def physics_informed_initial_points(dim, n_pts, seed=0):
+def physics_informed_initial_points(dim, n_pts, seed=0, hyperparameter=0.6):
     model_dict = fit_eigenvalues()
     sobol = SobolEngine(dimension=dim, scramble=True, seed=seed)
     selected_points = []
@@ -341,7 +346,7 @@ def physics_informed_initial_points(dim, n_pts, seed=0):
     while len(selected_points) < n_pts:
         # Generate a batch of points using Sobol
         X_batch = sobol.draw(n=n_pts).to(dtype=torch.float32)
-        probs = predict_normalized(model_dict, X_batch)
+        probs = predict_normalized(model_dict, X_batch, hyperparameter=hyperparameter)
         # Iterate over generated points and apply biased sampling with normalized probabilities
         for point, prob in zip(X_batch, probs):
             # print(f"Normalized Acceptance prob: {prob.item()}")
@@ -399,25 +404,27 @@ def generate_batch(
 
 def opt(n_init=200, max_its=50, physics_informed=True):
     # Define example state
+    best_loss_history = []
+
     state = ScboState(dim=dim, batch_size=batch_size)
     print(state)
-    best_loss_history = []
 
     # Generate initial data
     print("Sampling initial points.")
     train_X = physics_informed_initial_points(dim, n_init) if physics_informed else get_initial_points(dim, n_init)
     print("Initial sampling complete.")
+
     train_Y = torch.tensor([eval_objective(x) for x in train_X], **tkwargs).unsqueeze(-1)
+
     C1 = torch.tensor([eval_c1(x) for x in train_X], **tkwargs).unsqueeze(-1)
+    # Initialize TuRBO state
+    state = ScboState(dim, batch_size=batch_size)
 
     # Initialize best_loss_history with the best (minimized) loss at each point in the initial batch
     current_best_loss = float('inf')
     for y in (-train_Y).flatten():  # Use -train_Y to account for the negation
         current_best_loss = min(current_best_loss, y.item())
         best_loss_history.append(current_best_loss)
-
-    # Initialize TuRBO state
-    state = ScboState(dim, batch_size=batch_size)
 
     # Note: We use 2000 candidates here to make the tutorial run faster.
     # SCBO actually uses min(5000, max(2000, 200 * dim)) candidate points by default.
@@ -444,6 +451,7 @@ def opt(n_init=200, max_its=50, physics_informed=True):
         return model
 
     its = 0
+    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
 
     while its < max_its:
     # while not state.restart_triggered and its < max_its:  # Run until TuRBO converges
@@ -451,6 +459,7 @@ def opt(n_init=200, max_its=50, physics_informed=True):
         its += 1
         print(f"Current: {its}")
         model = get_fitted_model(train_X, train_Y)
+
         c1_model = get_fitted_model(train_X, C1)
 
         # Generate a batch of candidates
@@ -469,6 +478,7 @@ def opt(n_init=200, max_its=50, physics_informed=True):
 
         # Evaluate both the objective and constraints for the selected candidates
         Y_next = torch.tensor([eval_objective(x) for x in X_next], dtype=dtype, device=device).unsqueeze(-1)
+
         C1_next = torch.tensor([eval_c1(x) for x in X_next], dtype=dtype, device=device).unsqueeze(-1)
         C_next = torch.cat([C1_next, torch.empty(0)], dim=-1)
 
@@ -481,6 +491,7 @@ def opt(n_init=200, max_its=50, physics_informed=True):
         train_X = torch.cat((train_X, X_next), dim=0)
         train_X_unnormalized = train_X
         train_Y = torch.cat((train_Y, Y_next), dim=0)
+
         C1 = torch.cat((C1, C1_next), dim=0)
 
         # Update best_loss_history with the best (minimized) loss observed so far
@@ -490,15 +501,17 @@ def opt(n_init=200, max_its=50, physics_informed=True):
         # Save the DataFrame to a CSV file
         train_X_np = train_X_unnormalized.numpy()
         train_Y_np = train_Y.numpy().flatten()
+        train_X_columns = [f'train_X_{i + 1}' for i in range(train_X_np.shape[1])]
+
         C1_np = C1.numpy().flatten()
-        train_X_columns = [f'train_X_{i+1}' for i in range(train_X_np.shape[1])]
+
 
         # Combine the data into a DataFrame
         df = pd.DataFrame(train_X_np, columns=train_X_columns)
         df['train_Y'] = train_Y_np
+
         df['C1'] = C1_np
 
-        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
         file_name = f"datasets/PI_{physics_informed}_{timestamp}.csv"
         df.to_csv(file_name, index=False)
 
@@ -521,6 +534,196 @@ def opt(n_init=200, max_its=50, physics_informed=True):
         print("Reached maximum iteration. Optimization ended.")
     return best_loss_history, train_X, best_loss, best_x
 
+def opt_v2(n_init=200, max_its=50, physics_informed=True):
+    best_loss_history = []
+    N_CANDIDATES = 2000 if not SMOKE_TEST else 4
+
+    def get_fitted_model(X, Y):
+        likelihood = GaussianLikelihood(noise_constraint=Interval(1e-8, 1e-3))
+        covar_module = ScaleKernel(  # Use the same lengthscale prior as in the TuRBO paper
+            MaternKernel(nu=2.5, ard_num_dims=dim, lengthscale_constraint=Interval(0.005, 4.0))
+        )
+        model = SingleTaskGP(
+            X,
+            Y,
+            covar_module=covar_module,
+            likelihood=likelihood,
+            outcome_transform=Standardize(m=1),
+        )
+        mll = ExactMarginalLogLikelihood(model.likelihood, model)
+
+        with gpytorch.settings.max_cholesky_size(max_cholesky_size):
+            fit_gpytorch_mll(mll)
+
+        return model
+
+    if physics_informed:
+        state = ScboState(dim=dim, batch_size=batch_size)
+        print(state)
+
+        # Generate initial data
+        print("Sampling initial points.")
+        train_X = get_initial_points(dim, n_init)
+        train_Y = torch.tensor([eval_objective(x) for x in train_X], **tkwargs).unsqueeze(-1)
+        C1 = torch.tensor([eval_c1(x) for x in train_X], **tkwargs).unsqueeze(-1)
+        print("Initial sampling complete.")
+
+
+        # Initialize TuRBO state
+        state = ScboState(dim, batch_size=batch_size)
+
+        # Initialize best_loss_history with the best (minimized) loss at each point in the initial batch
+        current_best_loss = float('inf')
+        for y in (-train_Y).flatten():  # Use -train_Y to account for the negation
+            current_best_loss = min(current_best_loss, y.item())
+            best_loss_history.append(current_best_loss)
+
+        # Note: We use 2000 candidates here to make the tutorial run faster.
+        # SCBO actually uses min(5000, max(2000, 200 * dim)) candidate points by default.
+        sobol = SobolEngine(dim, scramble=True, seed=1)
+
+        its = 0
+        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+
+        while its < max_its:
+            # while not state.restart_triggered and its < max_its:  # Run until TuRBO converges
+            # Fit GP models for objective and constraints
+            its += 1
+            print(f"Current: {its}")
+            model = get_fitted_model(train_X, train_Y)
+
+            c1_model = get_fitted_model(train_X, C1)
+
+            # Generate a batch of candidates
+            with gpytorch.settings.max_cholesky_size(max_cholesky_size):
+                X_next = generate_batch(
+                    state=state,
+                    model=model,
+                    X=train_X,
+                    Y=train_Y,
+                    C=torch.cat((C1, torch.empty(0)), dim=-1),
+                    batch_size=batch_size,
+                    n_candidates=N_CANDIDATES,
+                    constraint_model=ModelListGP(c1_model),
+                    sobol=sobol,
+                )
+
+            # Evaluate both the objective and constraints for the selected candidates
+            Y_next = torch.tensor([eval_objective(x) for x in X_next], dtype=dtype, device=device).unsqueeze(-1)
+
+            C1_next = torch.tensor([eval_c1(x) for x in X_next], dtype=dtype, device=device).unsqueeze(-1)
+            C_next = torch.cat([C1_next, torch.empty(0)], dim=-1)
+
+            # Update TuRBO state
+            state = update_state(state=state, Y_next=Y_next, C_next=C_next)
+
+            # Append data. Note that we append all data, even points that violate
+            # the constraints. This is so our constraint models can learn more
+            # about the constraint functions and gain confidence in where violations occur.
+            train_X = torch.cat((train_X, X_next), dim=0)
+            train_X_unnormalized = train_X
+            train_Y = torch.cat((train_Y, Y_next), dim=0)
+
+            C1 = torch.cat((C1, C1_next), dim=0)
+
+            # Update best_loss_history with the best (minimized) loss observed so far
+            current_best_loss = min(current_best_loss, (-Y_next).min().item())
+            best_loss_history.append(current_best_loss)
+
+            # Save the DataFrame to a CSV file
+            train_X_np = train_X_unnormalized.numpy()
+            train_Y_np = train_Y.numpy().flatten()
+            train_X_columns = [f'train_X_{i + 1}' for i in range(train_X_np.shape[1])]
+
+            C1_np = C1.numpy().flatten()
+
+            # Combine the data into a DataFrame
+            df = pd.DataFrame(train_X_np, columns=train_X_columns)
+            df['train_Y'] = train_Y_np
+
+            df['C1'] = C1_np
+
+            file_name = f"datasets/PI_{physics_informed}_{timestamp}.csv"
+            df.to_csv(file_name, index=False)
+
+            # Print current status. Note that state.best_value is always the best
+            # objective value found so far which meets the constraints, or in the case
+            # that no points have been found yet which meet the constraints, it is the
+            # objective value of the point with the minimum constraint violation.
+            if (state.best_constraint_values <= 0).all():
+                print(f"{len(train_X)}) Best value: {state.best_value:.2e}, TR length: {state.length:.2e}")
+            else:
+                violation = state.best_constraint_values.clamp(min=0).sum()
+                print(
+                    f"{len(train_X)}) No feasible point yet! Smallest total violation: "
+                    f"{violation:.2e}, TR length: {state.length:.2e}"
+                )
+        best_loss, best_x = min(zip(best_loss_history, train_X.tolist()), key=lambda pair: pair[0])
+        if its < max_its:
+            print("Trust region too small. The model has converged.")
+        else:
+            print("Reached maximum iteration. Optimization ended.")
+
+    else:  # Plain Bayesian Optimization
+        print("Sampling initial points.")
+        train_X = get_initial_points(dim, n_init)
+        train_Y = torch.tensor([eval_objective(x) for x in train_X], **tkwargs).unsqueeze(-1)
+        print("Initial sampling complete.")
+
+
+        current_best_loss = float('inf')
+        for y in (-train_Y).flatten():  # Use -train_Y to account for the negation
+            current_best_loss = min(current_best_loss, y.item())
+            best_loss_history.append(current_best_loss)
+
+        its = 0
+        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        while its < max_its:
+            its += 1
+            print(f"Current: {its}")
+            model = get_fitted_model(train_X, train_Y)
+
+            acq_func = ExpectedImprovement(model=model, best_f=-current_best_loss)
+
+            l = [0] * dim
+            u = [1] * dim
+            b = torch.tensor([l, u]).to(**tkwargs)
+            X_next, acq_value = optimize_acqf(
+                acq_function=acq_func,
+                bounds=b,
+                q=batch_size,
+                num_restarts=20,
+                raw_samples=512,  # initialization samples
+            )
+
+            Y_next = torch.tensor([eval_objective(x) for x in X_next], dtype=dtype, device=device).unsqueeze(-1)
+            train_X = torch.cat((train_X, X_next), dim=0)
+            train_X_unnormalized = train_X
+            train_Y = torch.cat((train_Y, Y_next), dim=0)
+
+            current_best_loss = min(current_best_loss, (-Y_next).min().item())
+            best_loss_history.append(current_best_loss)
+
+            # Save the DataFrame to a CSV file
+            train_X_np = train_X_unnormalized.numpy()
+            train_Y_np = train_Y.numpy().flatten()
+            train_X_columns = [f'train_X_{i + 1}' for i in range(train_X_np.shape[1])]
+
+            df = pd.DataFrame(train_X_np, columns=train_X_columns)
+            df['train_Y'] = train_Y_np
+
+            file_name = f"datasets/PI_{physics_informed}_{timestamp}.csv"
+            df.to_csv(file_name, index=False)
+
+            print(f"{len(train_X)}) Best value: {current_best_loss}")
+
+        best_loss, best_x = min(zip(best_loss_history, train_X.tolist()), key=lambda pair: pair[0])
+        if its < max_its:
+            print("Trust region too small. The model has converged.")
+        else:
+            print("Reached maximum iteration. Optimization ended.")
+
+    return best_loss_history, train_X, best_loss, best_x
 
 
 # Eigenvalue test
