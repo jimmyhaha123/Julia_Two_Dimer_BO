@@ -27,7 +27,7 @@ function highest_peak_deviation(freqs, vals)
     if length(vals) < num + 1
         println("No enough peaks. ")
         return min
-    elseif vals[2] < 10^(-3) # Second peak too small
+    elseif vals[2] < 1e-4
         println("Second peak too small. No oscillations. ")
         return min
     else

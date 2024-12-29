@@ -219,7 +219,7 @@ function stability_constraint(p, dimer=1, sim_method="cmt", multiple_eig=false)
         if multiple_eig
             return 10
         else
-            return 1.5
+            return 1.0
         end
         # return 1.0, convert_cartesian([0.1*rand(), 0.1*rand(), 0.1*rand(), 0.1*rand(), 0.1*rand(), 0.1*rand(), 0.1*rand()])
     end
@@ -295,6 +295,7 @@ end
 # Example usage
 # p = [0.9259501468342337, 0.9370383303858767, 0.8556021732489235, 1.147449709932502, -0.6150562496186814, 1.5, 0.512521117858977, -0.571913546816477, 1.3492302785758965, 0.0494632343878712, 0.533884893558711]
 # println(jacobian_eigenvalues(p, 2)[1])
+
 
 if abspath(PROGRAM_FILE) == @__FILE__
     func = ARGS[1]

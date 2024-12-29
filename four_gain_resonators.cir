@@ -6,28 +6,28 @@ Two coupled RLC Dimers with realistic gain
 
 .param pi = 3.1415926535
 
-.param gainr1 = 6962.0703125                  $ gain resonator 1 resistance
-.param gainr2 = 1340.1953125                  $ gain resonator 2 resistance
-.param gainr3 = 5134.9609375                  $ gain resonator 3 resistance
-.param gainr4 = 5275.5078125                  $ gain resonator 4 resistance
+.param gainr1 = 387.55228304839915                  $ gain resonator 1 resistance
+.param gainr2 = 6470.88431377693                  $ gain resonator 2 resistance
+.param gainr3 = 3311.2648393315626                  $ gain resonator 3 resistance
+.param gainr4 = 8542.956315615698                  $ gain resonator 4 resistance
 
-.param resc1 = 979.6875p                   $ resonator capacitance of resonator 1
-.param resc2 = 1039.0625p                   $ resonator capacitance of resonator 2
-.param resc3 = 1082.8125p                   $ resonator capacitance of resonator 3
-.param resc4 = 1092.1875p                   $ resonator capacitance of resonator 4
+.param resc1 = 945.4576721195222p                   $ resonator capacitance of resonator 1
+.param resc2 = 924.4521614589363p                   $ resonator capacitance of resonator 2
+.param resc3 = 1094.8796247042544p                   $ resonator capacitance of resonator 3
+.param resc4 = 947.5780042727104p                   $ resonator capacitance of resonator 4
 
 .param resl1 = 200u                    $ resonator inductance of resonator 1
 .param resl2 = 200u                    $ resonator inductance of resonator 2
 .param resl3 = 200u                    $ resonator inductance of resonator 3
 .param resl4 = 200u                    $ resonator inductance of resonator 4
 
-.param factor1= 0.296875                $ factor in [0:1] modifies the shape of the nonlinear loss in resonator 1
-.param factor3= 0.446875                $ factor in [0:1] modifies the shape of the nonlinear loss in resonator 3                  
+.param factor1= 0.1755646527686398                $ factor in [0:1] modifies the shape of the nonlinear loss in resonator 1
+.param factor3= 0.17255270296717196                $ factor in [0:1] modifies the shape of the nonlinear loss in resonator 3                  
 
 
-.param lam1  = 0.137890625                     $ scaling of coupling capacitance 1
-.param lam2  = 0.489453125                     $ scaling of coupling capacitance 2
-.param lam3  = 0.130859375                     $ scaling of coupling capacitance 3
+.param lam1  = 0.2314583289629773                     $ scaling of coupling capacitance 1
+.param lam2  = 0.2679159610601978                     $ scaling of coupling capacitance 2
+.param lam3  = 0.14258163793733597                     $ scaling of coupling capacitance 3
 
 .param ccoupl1 = {lam1*resc1}            $ coupling of resonators 1 & 2
 .param ccoupl2 = {lam2*resc1}            $ coupling of resonators 2 & 3

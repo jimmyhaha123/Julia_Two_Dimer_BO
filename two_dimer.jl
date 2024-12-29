@@ -394,9 +394,9 @@ end
 # Takes in parameters, generate loss, transform plot, and time series plot
 function objective(p, plt=false, transform_range=(0, 2.5))
     initial_conditions = []
-    push!(initial_conditions, [0.1 + 0.1im, 0.1 + 0.1im, 0.1 + 0.1im, 0.1 + 0.1im])
+    # push!(initial_conditions, [0.1 + 0.1im, 0.1 + 0.1im, 0.1 + 0.1im, 0.1 + 0.1im])
     push!(initial_conditions, get_max_fixed_point(p))
-    println(initial_conditions[2])
+    # println(initial_conditions[2])
     info = [[] for _ in 1:6]
     for ic in initial_conditions
         try
