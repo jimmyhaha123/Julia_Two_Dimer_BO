@@ -66,10 +66,11 @@ def generate_bounds(val):
     # diff = [0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1]
     ub = []
     lb = []
+    r = 0.2
     for i in range(len(val)):
         mag = np.abs(val[i])
-        ub.append(val[i] + 0.3*mag)
-        lb.append(val[i] - 0.3*mag)
+        ub.append(val[i] + r*mag)
+        lb.append(val[i] - r*mag)
     return ub, lb
 
 # w2, w3, w4, k, an11, an10, an20, bn11, bn10, bn20, nu0

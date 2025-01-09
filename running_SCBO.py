@@ -179,7 +179,7 @@ def plot_from_csv_files(data_dir="datasets", output_dir="plots"):
         """
         data = pd.read_csv(file_path)
         if physics_informed:
-            sampled_values = -data.iloc[:, -2]  # Second to last column for physics-informed
+            sampled_values = -data.iloc[:, -1]  # Second to last column for physics-informed
         else:
             sampled_values = -data.iloc[:, -1]  # Last column for random initialization
         current_min = sampled_values.cummin()  # Compute the running minimum
@@ -201,24 +201,36 @@ def plot_from_csv_files(data_dir="datasets", output_dir="plots"):
     physics_trajectories = load_and_process_files("True")
     random_trajectories = load_and_process_files("False")
 
-    # Compute averages
-    avg_physics_trajectory = np.mean(physics_trajectories, axis=0)
-    avg_random_trajectory = np.mean(random_trajectories, axis=0)
+    # Compute averages and standard deviations
+    avg_physics_trajectory = np.median(physics_trajectories, axis=0)
+    std_physics_trajectory = np.std(physics_trajectories, axis=0)
+    avg_random_trajectory = np.median(random_trajectories, axis=0)
+    std_random_trajectory = np.std(random_trajectories, axis=0)
 
-    # Plot individual trajectories and average trajectory
+    # Plot average trajectories with shaded regions for one standard deviation
     plt.figure(figsize=(12, 8))
 
-    # Plot individual trajectories for physics-informed initialization
-    for trajectory in physics_trajectories:
-        plt.plot(trajectory, color='blue', alpha=0.3, label='Physics-Informed (Individual)' if 'Physics-Informed (Individual)' not in plt.gca().get_legend_handles_labels()[1] else "")
-    # Plot average trajectory for physics-informed initialization
+    # Physics-informed
     plt.plot(avg_physics_trajectory, color='blue', label='Physics-Informed (Average)', linewidth=2)
+    plt.fill_between(
+        range(len(avg_physics_trajectory)),
+        avg_physics_trajectory - std_physics_trajectory,
+        avg_physics_trajectory + std_physics_trajectory,
+        color='blue',
+        alpha=0.2,
+        label='Physics-Informed (±1 Std Dev)'
+    )
 
-    # Plot individual trajectories for random initialization
-    for trajectory in random_trajectories:
-        plt.plot(trajectory, color='orange', alpha=0.3, label='Random (Individual)' if 'Random (Individual)' not in plt.gca().get_legend_handles_labels()[1] else "")
-    # Plot average trajectory for random initialization
+    # Random initialization
     plt.plot(avg_random_trajectory, color='orange', label='Random (Average)', linewidth=2)
+    plt.fill_between(
+        range(len(avg_random_trajectory)),
+        avg_random_trajectory - std_random_trajectory,
+        avg_random_trajectory + std_random_trajectory,
+        color='orange',
+        alpha=0.2,
+        label='Random (±1 Std Dev)'
+    )
 
     # Labeling the plot
     plt.xlabel("Iteration")
@@ -240,4 +252,4 @@ def plot_from_csv_files(data_dir="datasets", output_dir="plots"):
     print(f"Plot saved to {file_name}")
 
 
-generate_eigenvalues(n_pts=1000)
+plot_from_csv_files()

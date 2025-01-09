@@ -19,14 +19,6 @@
 .param tau = 2000/(natfreq1)           $ total evolution time
 .param voltdivr = 550.0
 
-* The control of a noise voltage source with a parameter does not work
-* The Gaussian noise is provided by the random voltage source 
-* TRNOISE (VRMS timestep 0 0) $white noise 
-* where the Voltage root mean square VRMS is calculated from
-* VRMS = sqrt(4*k_B*R*Temperature*B)
-* where the temperature is in Kelvin, k_B=1.38e-23 is the Boltzmann constant,
-* and the bandwidth B is taken as the frequency of the resonator natfreq1
-* (See https://en.wikipedia.org/wiki/Johnson%E2%80%93Nyquist_noise)
 *-------------------------------------------------------------
 * End of parameters...
 *-------------------------------------------------------------
@@ -48,15 +40,13 @@ Rd11  vo vd {voltdivr}
 Rd12  vd 0  {voltdivr}
 
 * positive feedback creating negative resistance
-Rfb1      vo          lcnode1_1   {gainr1}
-Vnoise1 lcnode1_1   lcnode1     TRNOISE (0.01 timestep 0 0) $white noise 
+Rfb1      vo    lcnode1   {gainr1}
 
 * Nonlinear loss
 *resistance to ground with back-to-back Diodes
-Vnoise2 lcnode1_2   lcnode1     TRNOISE (0.01 timestep 0 0) $white noise 
-R1 lcnode1_3 lcnode1_2  {factor*gainr1}
-D11 lcnode1_3 0 1N914
-D12 0 lcnode1_3 1N914
+R1 lcnode1 lcnode1_2  {factor*gainr1}
+D11 lcnode1_2 0 1N914
+D12 0 lcnode1_2 1N914
 
 
 *RESONATOR 2 WITH LINEAR GAIN
@@ -72,10 +62,13 @@ Rd21  vo2 vd2 {voltdivr}
 Rd22  vd2 0  {voltdivr}
 
 * positive feedback creating negative resistance
-Vnoise3 lcnode2_1   lcnode2     TRNOISE (0.01 timestep 0 0) $white noise 
-Rfb2      vo2    lcnode2_1   {gainr2}
+Rfb2      vo2    lcnode2   {gainr2}
+
+
+
 
 *COUPLING OF RESONATORS
+*K12     L1     L2    {mu}                  $ 1 to 2, mutual inductance
 Cc        lcnode1     lcnode2     {ccoupl}  $ capacitive coupling
 
 
@@ -88,8 +81,9 @@ Cc        lcnode1     lcnode2     {ccoupl}  $ capacitive coupling
 .tran {timestep} {tau} uic
 .option post=none nomod brief
 .control
-    
+
     run                                $ auto run
+
     linearize                          $ re-sample to only dt step points 
 
     set wr_singlescale                      $ only print out one time scale
@@ -154,3 +148,4 @@ Dm     vm   3    Dop
 ******
 
 .END
+
