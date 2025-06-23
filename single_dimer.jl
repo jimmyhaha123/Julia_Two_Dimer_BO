@@ -1,11 +1,12 @@
 include("transform_library.jl")
+include("stability.jl")
 
 using DifferentialEquations, FFTW, Statistics, BayesianOptimization, GaussianProcesses, Distributions, Peaks, Interpolations, DSP
 using Base: redirect_stdout
 
 num = 40
 min = 0
-replication = 50
+replication = 10
 noise = false
 
 # Systen definition
@@ -449,53 +450,83 @@ end
 
 # Takes in parameters, generate loss, transform plot, and time series plot
 function objective(p, plt=false, transform_range=(0, 2.5))
-    try
-        # Solve system
-        x, t_interp, mean_time_step = solve_sys(p)
-        # Repetition check        
-        repetition, repeat_index = repetition_check(x, t_interp)
-        t_interp = t_interp[1:repeat_index]
+    initial_conditions = []
+    push!(initial_conditions, [0.1 + 0.1*im, 0.1 + 0.1*im])
+    push!(initial_conditions, get_max_fixed_point(p, 1))
+    # println(initial_conditions[2])
+    info = [[] for _ in 1:6]
+    for ic in initial_conditions    
+        try
+            # Solve system
+            x, t_interp, mean_time_step = solve_sys(p)
+            # Repetition check        
+            repetition, repeat_index = repetition_check(x, t_interp)
+            t_interp = t_interp[1:repeat_index]
 
-        if repetition == true
-            transforms = []
-            for i in 1:length(x)
-                x[i] = x[i][1:repeat_index]
-                t = augmented_fft(x[i], replication)
-                push!(transforms, t / length(x[i]))
+            if repetition == true
+                transforms = []
+                for i in 1:length(x)
+                    x[i] = x[i][1:repeat_index]
+                    t = augmented_fft(x[i], replication)
+                    push!(transforms, t / length(x[i]))
+                end
+            else
+                push!(info[1], 39)
+                push!(info[2], [])
+                push!(info[3], [])
+                push!(info[4], x[1])
+                push!(info[5], t_interp)
+                push!(info[6], 0)
+                continue
             end
-        else
-            return num - 1, [], [], x[1], t_interp, 0
+
+            peak_frequencies = []
+            sorted_vals = []
+            mag_transforms = []
+            freqs = []
+            tseries = []
+            losses = Float64[]
+
+            for i in 1:length(transforms)
+                result = extract_peaks(mean_time_step, x[i], t_interp, repeat_index, transforms[i], transform_range, replication)
+                push!(peak_frequencies, result[1])
+                push!(sorted_vals, result[2])
+                push!(mag_transforms, result[3])
+                push!(freqs, result[4])
+                push!(tseries, result[5])
+                push!(losses, float(highest_peak_deviation(result[1], result[2])))
+            end
+            min_loss = minimum(losses)
+            min_idx = argmin(losses)
+
+            #db scale
+            mag_transforms[min_idx] = mag_transforms[min_idx] / sorted_vals[min_idx][2]
+            mag_transforms[min_idx] = 20 * log10.(mag_transforms[min_idx])
+
+
+            push!(info[1], min_loss)
+            push!(info[2], mag_transforms[min_idx])
+            push!(info[3], freqs[min_idx])
+            push!(info[4], tseries[min_idx])
+            push!(info[5], t_interp)
+            push!(info[6], min_idx)
+
+        catch e
+            println("Error in ode: ", e)
+            push!(info[1], num - 1)
+            push!(info[2], [])
+            push!(info[3], [])
+            push!(info[4], [])
+            push!(info[5], [])
+            push!(info[6], 0)
+
+
+        # return min_loss, mag_transforms[min_idx], freqs[min_idx], tseries[min_idx], t_interp, min_idx
         end
-
-        peak_frequencies = []
-        sorted_vals = []
-        mag_transforms = []
-        freqs = []
-        tseries = []
-        losses = Float64[]
-
-        for i in 1:length(transforms)
-            result = extract_peaks(mean_time_step, x[i], t_interp, repeat_index, transforms[i], transform_range, replication)
-            push!(peak_frequencies, result[1])
-            push!(sorted_vals, result[2])
-            push!(mag_transforms, result[3])
-            push!(freqs, result[4])
-            push!(tseries, result[5])
-            push!(losses, float(highest_peak_deviation(result[1], result[2])))
-        end
-        min_loss = minimum(losses)
-        min_idx = argmin(losses)
-
-        #db scale
-        mag_transforms[min_idx] = mag_transforms[min_idx] / sorted_vals[min_idx][2]
-        mag_transforms[min_idx] = 20 * log10.(mag_transforms[min_idx])
-
-
-        return min_loss, mag_transforms[min_idx], freqs[min_idx], tseries[min_idx], t_interp, min_idx
-    catch e
-        println("Error in ode: ", e)
-        return num - 1, [], [], [], [], 0
     end
+    idx = argmin(info[1])
+    println(info[1])
+    return info[1][idx], info[2][idx], info[3][idx], info[4][idx], info[5][idx], info[6][idx]
 end
 
 # Takes in parameters, generate loss, transform plot, time series plot, and min index.

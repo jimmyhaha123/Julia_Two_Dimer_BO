@@ -6,7 +6,7 @@ using Base: redirect_stdout
 
 num = 40
 min = 0
-replication = 50
+replication = 10
 
 # Systen definition
 function sys!(du, u, p, t)
@@ -36,7 +36,7 @@ function solve_sys(p, u0=[0.1 + 0.1*im, 0.1 + 0.1*im, 0.1 + 0.1*im, 0.1 + 0.1*im
     # println("Eigenvalue: " * string(eigenvalue))
     # u0 = collect(init_cond)  # Using the initial condition selection
 
-    t = 100000.0
+    t = 50000.0
     tspan = (0.0, t)
 
     prob = ODEProblem(sys!, u0, tspan, p)
@@ -45,7 +45,7 @@ function solve_sys(p, u0=[0.1 + 0.1*im, 0.1 + 0.1*im, 0.1 + 0.1*im, 0.1 + 0.1*im
     sol = solve(prob, abstol=abstol, reltol=reltol)
 
     u0 = sol.u[end]
-    tspan = (0, 10000)
+    tspan = (0, 7000)
     prob = ODEProblem(sys!, u0, tspan, p)
     abstol = 1e-10
     reltol = 1e-8
@@ -394,8 +394,8 @@ end
 # Takes in parameters, generate loss, transform plot, and time series plot
 function objective(p, plt=false, transform_range=(0, 2.5))
     initial_conditions = []
-    # push!(initial_conditions, [0.1 + 0.1im, 0.1 + 0.1im, 0.1 + 0.1im, 0.1 + 0.1im])
-    push!(initial_conditions, get_max_fixed_point(p))
+    push!(initial_conditions, [0.1 + 0.1im, 0.1 + 0.1im, 0.1 + 0.1im, 0.1 + 0.1im])
+    # push!(initial_conditions, get_max_fixed_point(p))
     # println(initial_conditions[2])
     info = [[] for _ in 1:6]
     for ic in initial_conditions
@@ -414,7 +414,7 @@ function objective(p, plt=false, transform_range=(0, 2.5))
                     push!(transforms, t / (length(x[i])))
                 end
             else
-                push!(info[1], min_loss)
+                push!(info[1], 55)
                 push!(info[2], [])
                 push!(info[3], [])
                 push!(info[4], x[1])
@@ -438,7 +438,7 @@ function objective(p, plt=false, transform_range=(0, 2.5))
                 push!(mag_transforms, result[3])
                 push!(freqs, result[4])
                 push!(tseries, result[5])
-                push!(losses, float(highest_peak_deviation(result[1], result[2])))
+                push!(losses, float(smoothness_loss(result[1], result[2])))
             end
             min_loss = minimum(losses)
             min_idx = argmin(losses)
@@ -456,7 +456,7 @@ function objective(p, plt=false, transform_range=(0, 2.5))
             # return min_loss, mag_transforms[min_idx], freqs[min_idx], tseries[min_idx], t_interp, min_idx
         catch e
             println("Error in ode: ", e)
-            push!(info[1], num - 1)
+            push!(info[1], 55)
             push!(info[2], [])
             push!(info[3], [])
             push!(info[4], [])
@@ -548,10 +548,10 @@ end
 
 function opt(num_its)
     # [w2, w3, w4, k, an11, an10, an20, bn11, bn10, bn20, nu0]
-    lower_bound = [0.9, 0.9, 0.8, 1, -0.7, 0.9, 0.4, -0.7, 1.2, 0, 0.4]
-    upper_bound = [1.1, 1.1, 1, 1.2, -0.5, 1.1, 0.6, -0.5, 1.4, 0.2, 0.6]
+    lower_bound = [0.63, 0.63, 0.564446180651301, 0.84, -0.9099999999999999, 0.77, 0.28, -0.65, 0.8905064284498214, 0.0, 0.42]
+    upper_bound = [1.17, 1.17, 1.0482571926381303, 1.56, -0.49, 1.4300000000000002, 0.52, -0.35, 1.6537976528353824, 0.0, 0.78]
     input_dim = length(lower_bound)
-    model = ElasticGPE(input_dim, mean=MeanConst(0.0), kernel=SEArd(zeros(input_dim), 5.0), logNoise=-Inf, capacity=3000)
+    model = ElasticGPE(input_dim, mean=MeanConst(0.0), kernel=SEArd(zeros(input_dim), 5.0), logNoise=-Inf, capacity=6000)
     set_priors!(model.mean, [Normal(1, 2)])
     vec1 = vcat(zeros(input_dim) .- 1.0, [0.0])
     vec2 = vcat(zeros(input_dim) .+ 4.0, [10.0])
@@ -571,7 +571,7 @@ function opt(num_its)
         repetitions=1,
         maxiterations=num_its,
         sense=Min,
-        acquisitionoptions=(method=:LD_LBFGS, restarts=5, maxtime=0.1, maxeval=1000),
+        acquisitionoptions=(method=:LD_LBFGS, restarts=20, maxtime=0.1, maxeval=5000),
         verbosity=Progress)
     result = boptimize!(opt)
     return result

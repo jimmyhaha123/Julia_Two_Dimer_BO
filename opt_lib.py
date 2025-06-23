@@ -48,6 +48,8 @@ dtype = torch.double
 tkwargs = {"device": device, "dtype": dtype}
 max_cholesky_size = float("inf")
 
+two_dimer = True
+
 def generate_bounds(val):
     # diff = [0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1]
     ub = []
@@ -58,10 +60,21 @@ def generate_bounds(val):
         lb.append(val[i] - 0.3*mag)
     return ub, lb
 
-ub, lb = generate_bounds([0.5348356988269656, 0.9539459131310281, 1.3706409241248039, 1.0075697873925655, -0.9582053739454646, 0.3533010453018266, 0.08243808576203537, -0.9173040619954651, 0.9737381475497143, 0.21232344561167762, 0.7559953794996148])
-bounds = [(lb[i], ub[i]) for i in range(len(lb))]
+ub_two_dimer, lb_two_dimer = generate_bounds([0.5348356988269656, 0.9539459131310281, 1.3706409241248039, 1.0075697873925655, -0.9582053739454646, 0.3533010453018266, 0.08243808576203537, -0.9173040619954651, 0.9737381475497143, 0.21232344561167762, 0.7559953794996148])
 
-fun = TwoDimerCMTLoss(bounds=bounds).to(**tkwargs)
+ub_two_dimer, lb_two_dimer = generate_bounds([0.9259501468342337, 0.9370383303858767, 0.8556021732489235, 1.147449709932502, -0.6150562496186814, 0.9808652766864474, 0.512521117858977, -0.571913546816477, 1.3492302785758965, 0.0494632343878712, 0.533884893558711])
+
+bounds_two_dimer = [(lb_two_dimer[i], ub_two_dimer[i]) for i in range(len(lb_two_dimer))]
+
+ub_single_dimer = [1.5, 1.5, -0.1, 3, 1]
+lb_single_dimer = [0.5, 0.5, -1, 0.5, 0]
+bounds_single_dimer = [(lb_single_dimer[i], ub_single_dimer[i]) for i in range(len(lb_single_dimer))]
+
+if two_dimer:
+    fun = TwoDimerCMTLoss(bounds=bounds_two_dimer).to(**tkwargs)
+else:
+    fun = SingleDimerCMTLoss(bounds=bounds_single_dimer).to(**tkwargs)
+
 lb, ub = fun.bounds
 dim = fun.dim
 
@@ -432,7 +445,10 @@ def opt_cEI(n_init=10, max_its=50, X=None, Y=None):
     return best_loss_history, train_X, best_loss, best_x
 
 
-print(fun.bounds)
+torch.set_printoptions(precision=8)
+print(unnormalize(torch.tensor([0.0407197625638613,0.8308238210903726,0.1634761139517184,0.2151701729951256,0.6576627321469215,0.49016986148064046,0.07100749654928933,0.3641039007575569,0.39124091559634855,0.7886213350707738,0.7195902294189498]), fun.bounds))
+
+# print(eval_objective(torch.tensor([0.03407254070043564,0.6084235310554504,0.6626384258270264,0.09372113645076752,0.363017201423645,0.1379329115152359,0.9169896841049194,0.7357160449028015,0.8821753859519958,0.6839188933372498,0.6588631272315979])))
 
 
 

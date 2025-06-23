@@ -279,7 +279,11 @@ function get_max_fixed_point(p, dimer=2, sim_method="cmt")
     # println("Eigenvalues List:", eigenvalues_list)
 
     if eigenvalues_list == []
-        return [0.1 + 0.1*im, 0.1 + 0.1*im, 0.1 + 0.1*im, 0.1 + 0.1*im]
+        if dimer == 2
+            return [0.1 + 0.1*im, 0.1 + 0.1*im, 0.1 + 0.1*im, 0.1 + 0.1*im]
+        else
+            return [0.1 + 0.1*im, 0.1 + 0.1*im]
+        end
         # return 1.0, convert_cartesian([0.1*rand(), 0.1*rand(), 0.1*rand(), 0.1*rand(), 0.1*rand(), 0.1*rand(), 0.1*rand()])
     end
     # Flatten the eigenvalues to locate the maximum real part

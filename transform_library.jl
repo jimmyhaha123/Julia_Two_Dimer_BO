@@ -8,9 +8,6 @@ min = 0
 
 # First replicate the signal by num, then fo Fourier Transform
 function augmented_fft(x, replication)
-    # Get the length of the original signal
-    
-    # Replicate the signal 100 times
     x_extended = repeat(x, replication)
     
     # Perform FFT on the extended signal
@@ -21,9 +18,107 @@ function augmented_fft(x, replication)
 
 end
 
+function mode_gap(freqs, vals)
+    tol = 0.05
+    sorted_numbers = sort(freqs)
+    gaps = diff(sorted_numbers)
+    similar(a, b) = (a == 0 && b == 0) || (abs(a - b) ≤ tol * max(abs(a), abs(b)))
+    
+    # We'll store cluster representatives and their counts.
+    clusters = Float64[]
+    counts = Int[]
+    
+    for x in gaps
+        found = false
+        # Try to add x to an existing cluster.
+        for i in 1:length(clusters)
+            if similar(x, clusters[i])
+                counts[i] += 1
+                # Update the cluster's representative as the running average.
+                clusters[i] = (clusters[i] * (counts[i]-1) + x) / counts[i]
+                found = true
+                break
+            end
+        end
+        # If x did not match any existing cluster, start a new one.
+        if !found
+            push!(clusters, x)
+            push!(counts, 1)
+        end
+    end
+    
+    # Find the cluster with the maximum count.
+    max_count = maximum(counts)
+    index = findfirst(isequal(max_count), counts)
+    return clusters[index]
+end
+
 # Loss function
 function highest_peak_deviation(freqs, vals)
+
+    function is_well_separated(numbers::Vector{Float64}, a::Float64, n::Int; tol::Float64=0.05)::Bool
+        # Compute the gaps from the sorted numbers
+        sorted_numbers = sort(numbers)
+        gaps = diff(sorted_numbers)
+        if isempty(gaps)
+            return false
+        end
+    
+        # Define similarity: two gaps are similar if their relative difference is within tol.
+        similar(g1, g2, tol) = abs(g1 - g2) / ((g1 + g2) / 2) <= tol
+    
+        # Sort the gaps so that similar gap sizes come together
+        sorted_gaps = sort(gaps)
+    
+        clusters = Vector{Vector{Float64}}()  # to store clusters of similar gaps
+        current_cluster = [sorted_gaps[1]]
+    
+        # Cluster contiguous gaps in sorted order that are similar
+        for g in sorted_gaps[2:end]
+            # Use the mean of the current cluster as the representative value.
+            if similar(mean(current_cluster), g, tol)
+                push!(current_cluster, g)
+            else
+                push!(clusters, copy(current_cluster))
+                current_cluster = [g]
+            end
+        end
+        push!(clusters, copy(current_cluster))  # add the last cluster
+    
+        # Check each cluster for the conditions:
+        # cluster size > n and mean gap > a.
+        for cluster in clusters
+            if length(cluster) > n && mean(cluster) < a
+                println("Mean gap: ", mean(cluster))
+                return false
+            end
+        end
+    
+        return true
+    end
+    
+    
     min = num - 1
+    if length(vals) < num + 1
+        println("No enough peaks. ")
+        return min
+    elseif vals[2] < 1e-4
+        println("Second peak too small. No oscillations. ")
+        return min
+    elseif ~is_well_separated(freqs[2:num+1], 0.005, 15)  # Some peaks are too close together
+        println("Peaks too close together.")
+        return min
+    else
+        sub_peaks = vals[2:num+1]
+        sub_peaks = sub_peaks / sub_peaks[1] # Normalization with respect to second peak
+        cost = sum(abs.(sub_peaks .- 1))
+        # println("Sucessful. Loss: " * string(cost))
+        return cost
+    end
+end
+
+function smoothness_loss(freqs, vals)
+    min = 55
     if length(vals) < num + 1
         println("No enough peaks. ")
         return min
@@ -33,9 +128,27 @@ function highest_peak_deviation(freqs, vals)
     else
         sub_peaks = vals[2:num+1]
         sub_peaks = sub_peaks / sub_peaks[1] # Normalization with respect to second peak
-        cost = sum(abs.(sub_peaks .- 1))
+        sub_freqs = freqs[2:num+1]
+        deviation_loss = sum(abs.(sub_peaks .- 1))
+
+        mode = mode_gap(sub_freqs, sub_peaks)
+        if mode < 0.01
+            println("Gaps too small. ")
+            return min
+        end
+
         # println("Sucessful. Loss: " * string(cost))
-        return cost
+        # Now sort the sub_freqs in increasing order
+        indices = sortperm(sub_freqs)
+        sub_freqs = sub_freqs[indices]
+        sub_peaks = sub_peaks[indices]
+
+        dvals = diff(sub_peaks)
+        s = sign.(dvals)
+        num_direction_changes = sum(diff(s) .!= 0)
+        smoothness_loss = num_direction_changes * 1
+
+        return deviation_loss + smoothness_loss
     end
 end
 
@@ -84,7 +197,7 @@ function extract_peaks(mean_time_step, x_sol, t_interp, repeat_index, transform,
     sorted_indices = sortperm(vals, rev=true)
     sorted_pks = pks[sorted_indices]
     sorted_vals = vals[sorted_indices] # Magnitude of peaks
-    peak_frequencies = freqs[sorted_pks] # Frequency of peaks
+    peak_frequencies = freqs[sorted_pks] # Frequency of peaks (here frequency is sorted)
     # transform_plot = plot(freqs, mag_transform, title="Fourier Transform", xlabel="Frequency", ylabel="Magnitude", xlims=transform_range, ylims=(1e-9, 1e-1), yaxis=:log)
 
     # dB scale transform plot

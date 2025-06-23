@@ -1,10 +1,12 @@
 using DifferentialEquations, FFTW, Statistics, BayesianOptimization, GaussianProcesses, Distributions, Peaks, Interpolations, DSP
 using Base: redirect_stdout
 
+include("transform_library.jl")
+
 
 num = 40
 min = 0
-replication = 50
+replication = 10
 
 # Systen definition
 function sys!(du, u, p, t)
@@ -33,7 +35,7 @@ function solve_sys(p)
     u0 = [range * rand() + im*range * rand(), range * rand() + im*range * rand(), range * rand() + im*range * rand(), range * rand() + im*range * rand()]
     # Fixing initial condition for consistency
     u0 = [0.1 + 0.1*im, 0.1 + 0.1*im, 0.1 + 0.1*im, 0.1 + 0.1*im, 0.1 + 0.1*im, 0.1 + 0.1*im]
-    t = 100000.0
+    t = 50000.0
     tspan = (0.0, t)
 
     prob = ODEProblem(sys!, u0, tspan, p)
@@ -42,7 +44,7 @@ function solve_sys(p)
     sol = solve(prob, abstol=abstol, reltol=reltol)
 
     u0 = sol.u[end]
-    tspan = (0, 10000)
+    tspan = (0, 7000)
     prob = ODEProblem(sys!, u0, tspan, p)
     abstol = 1e-10
     reltol = 1e-8
@@ -483,7 +485,7 @@ function objective(p, plt=false, transform_range=(0, 2.5))
                 push!(transforms, t / (length(x[i])))
             end
         else
-            return num - 1, [], [], x[1], t_interp, 0
+            return 55, [], [], x[1], t_interp, 0
         end
 
         peak_frequencies = []
@@ -500,7 +502,7 @@ function objective(p, plt=false, transform_range=(0, 2.5))
             push!(mag_transforms, result[3])
             push!(freqs, result[4])
             push!(tseries, result[5])
-            push!(losses, float(highest_peak_deviation(result[1], result[2])))
+            push!(losses, float(smoothness_loss(result[1], result[2])))
         end
         min_loss = minimum(losses)
         min_idx = argmin(losses)
@@ -512,7 +514,7 @@ function objective(p, plt=false, transform_range=(0, 2.5))
         return min_loss, mag_transforms[min_idx], freqs[min_idx], tseries[min_idx], t_interp, min_idx
     catch e
         println("Error in ode: ", e)
-        return return num - 1, [], [], [], [], 0
+        return 55, [], [], [], [], 0
     end
 end
 
@@ -593,16 +595,16 @@ end
 
 function opt(num_its)
     # [w2, w3, w4, w5, w6, k2, k3, k4, k5, an11, an10, an20, bn11, bn10, bn20, cn11, cn10, cn20]
-    lower_bound = [0.9, 0.9, 0.9, 0.9, 0.9, 0.9, 0.9, 0.9, 0.9, -2, 0, 0, -2, 0, 0, -2, 0, 0]
+    lower_bound = [0.9, 0.9, 0.9, 0.9, 0.9, 0.9, 0.9, 0.9, 0.9, -1, 0, 0, -0.0001, 0, 0, -1, 0, 0]
     upper_bound = [1.1, 1.1, 1.1, 1.1, 1.1, 1.1, 1.1, 1.1, 1.1, 0, 3, 1, 0, 3, 1, 0, 3, 1]
     input_dim = length(lower_bound)
-    model = ElasticGPE(input_dim, mean=MeanConst(0.0), kernel=SEArd(zeros(input_dim), 5.0), logNoise=-Inf, capacity=3000)
+    model = ElasticGPE(input_dim, mean=MeanConst(0.0), kernel=SEArd(zeros(input_dim), 5.0), logNoise=-Inf, capacity=6000)
     set_priors!(model.mean, [Normal(1, 2)])
     vec1 = vcat(zeros(input_dim) .- 1.0, [0.0])
     vec2 = vcat(zeros(input_dim) .+ 4.0, [10.0])
     modeloptimizer = MAPGPOptimizer(
         every=5,
-        noisebounds=nothing ,
+        noisebounds=nothing,
         kernbounds=[vec1, vec2],
         # GaussianProcesses.get_param_names(model.kernel),
         maxeval=40)
@@ -616,7 +618,7 @@ function opt(num_its)
         repetitions=1,
         maxiterations=num_its,
         sense=Min,
-        acquisitionoptions=(method=:LD_LBFGS, restarts=5, maxtime=0.1, maxeval=1000),
+        acquisitionoptions=(method=:LD_LBFGS, restarts=20, maxtime=0.1, maxeval=1000),
         verbosity=Progress)
     result = boptimize!(opt)
     return result

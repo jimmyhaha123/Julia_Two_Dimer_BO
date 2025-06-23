@@ -33,7 +33,18 @@ params = [0.9259501468342337, 0.9370383303858767, 0.8556021732489235, 1.14744970
 # Without nonlinear coupling
 params = [0.9259501468342337, 0.9370383303858767, 0.8556021732489235, 1.147449709932502, -0.6150562496186814, 0.9808652766864474, 0.512521117858977, -0.571913546816477, 1.3492302785758965, 0.0494632343878712, 0.533884893558711]
 
-params = [0.6909,  0.6780,  1.3969,  0.7689, -0.7338,  0.3955,  0.0973, -1.1333, 0.9317,  0.2513,  0.8989] 
+# params = [ 0.67078778,  1.12303510,  0.68284383,  0.95135297, -0.55687337,
+# 0.97508005,  0.38060049, -0.61854603,  1.26118566,  0.05802892,
+# 0.60422644]
+
+params = [0.9, 0.9, 0.8063516866447157, 1.2, -0.7, 1.1, 0.4, -0.5, 1.272152040642602, 0.0, 0.6]
+
+
+params = [1.17, 0.63, 0.564446180651301, 1.56, -0.9099999999999999, 1.0734941117229975, 0.52, -0.65, 1.6502573779699414, 0.0, 0.42]
+
+params = [1.0603125, 0.6384375, 1.0255785514512477, 1.41375, -0.5359375, 0.8834375000000001, 0.41125, -0.5234375, 1.0694028091651873, 0.0, 0.650625]
+
+params = [0.7247037931853786, 0.8630194622503194, 1.0214028372587463, 1.0653901954545089, -0.539670874696093, 0.922719823442953, 0.30268924272958525, -0.3605283562774053, 1.3420227207692053, 0.0, 0.42766061499868274]
 min_loss, mag_transform, freqs, tseries, t_interp, _ = objective(params, true, (0, 1e6))
 println(min_loss)
 
@@ -43,7 +54,19 @@ println(min_loss)
 plot(t_interp, tseries)
 show()
 
+
+# Storing peaks in CSV for loss testing purposes
+pks, vals = findmaxima(mag_transform)
+sorted_indices = sortperm(vals, rev=true)
+sorted_pks = pks[sorted_indices]
+sorted_vals = vals[sorted_indices] # Magnitude of peaks
+peak_frequencies = freqs[sorted_pks] # Frequency of peaks (here frequency is sorted)
+sorted_vals = sorted_vals[2:41]
+peak_frequencies = peak_frequencies[2:41]
+
+
 #db scale
 plot(freqs, mag_transform)
+scatter(peak_frequencies, sorted_vals, c="red", marker="o", s=20, label="Peaks")
 show()
 

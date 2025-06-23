@@ -201,11 +201,14 @@ def plot_from_csv_files(data_dir="datasets", output_dir="plots"):
     physics_trajectories = load_and_process_files("True")
     random_trajectories = load_and_process_files("False")
 
+    n_physics = physics_trajectories.shape[0]
+    n_random = random_trajectories.shape[0]
+
     # Compute averages and standard deviations
-    avg_physics_trajectory = np.median(physics_trajectories, axis=0)
-    std_physics_trajectory = np.std(physics_trajectories, axis=0)
-    avg_random_trajectory = np.median(random_trajectories, axis=0)
-    std_random_trajectory = np.std(random_trajectories, axis=0)
+    avg_physics_trajectory = np.mean(physics_trajectories, axis=0)
+    std_physics_trajectory = np.std(physics_trajectories, axis=0) / np.sqrt(n_physics)
+    avg_random_trajectory = np.mean(random_trajectories, axis=0)
+    std_random_trajectory = np.std(random_trajectories, axis=0) / np.sqrt(n_physics)
 
     # Plot average trajectories with shaded regions for one standard deviation
     plt.figure(figsize=(12, 8))

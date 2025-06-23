@@ -286,18 +286,19 @@ def julia_stability_constraint(p):
     return result
 
 
-# def generate_bounds(val):
-#     # diff = [0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1]
-#     ub = []
-#     lb = []
-#     for i in range(len(val)):
-#         mag = np.abs(val[i])
-#         ub.append(val[i] + 0.3*mag)
-#         lb.append(val[i] - 0.3*mag)
-#     return ub, lb
+def generate_bounds(val):
+    # diff = [0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1, 0.1]
+    ub = []
+    lb = []
+    scale = 0.3
+    for i in range(len(val)):
+        mag = np.abs(val[i])
+        ub.append(val[i] + scale*mag)
+        lb.append(val[i] - scale*mag)
+    return ub, lb
 
-# ub, lb = generate_bounds([0.5348356988269656, 0.9539459131310281, 1.3706409241248039, 1.0075697873925655, -0.9582053739454646, 0.3533010453018266, 0.08243808576203537, -0.9173040619954651, 0.9737381475497143, 0.21232344561167762, 0.7559953794996148])
-# print(f"ub: {ub}")
-# print(f"lb: {lb}")
+ub, lb = generate_bounds([0.9, 0.9, 0.8063516866447157, 1.2, -0.7, 1.1, 0.4, -0.5, 1.272152040642602, 0.0, 0.6])
+print(f"ub: {ub}")
+print(f"lb: {lb}")
 
 # print(julia_stability_constraint(np.array([0.514297800103835, 0.9838395910424683, 1.739188907548467, 1.2959993472667057, -0.8519495863100531, 0.4177710458823611, 0.08814366077888547, -1.1388648706181042, 1.202823065442475, 0.16878436742085579, 0.828469370902051])))

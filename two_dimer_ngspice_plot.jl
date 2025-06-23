@@ -13,6 +13,7 @@ p = [387.55228304839915, 6470.88431377693, 3311.2648393315626, 8542.956315615698
 loss, mag_transform, freqs, tseries, t_interp, min_idx = ngspice_objective(p, true, (0, 0.5e5))
 
 println(min_idx)
+println(loss)
 
 plot(t_interp, tseries)
 show()
@@ -21,4 +22,4 @@ plot(freqs, mag_transform)
 show()
 
 
-println(loss)
+
