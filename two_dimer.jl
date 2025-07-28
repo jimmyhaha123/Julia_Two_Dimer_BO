@@ -40,23 +40,23 @@ function solve_sys(p, u0=[0.1 + 0.1*im, 0.1 + 0.1*im, 0.1 + 0.1*im, 0.1 + 0.1*im
     tspan = (0.0, t)
 
     prob = ODEProblem(sys!, u0, tspan, p)
-    abstol = 1e-8
+    abstol = 1e-6
     reltol = 1e-6
-    sol = solve(prob, abstol=abstol, reltol=reltol)
+    sol = solve(prob, abstol=abstol, reltol=reltol, save_everystep=false)
 
     u0 = sol.u[end]
     tspan = (0, 7000)
     prob = ODEProblem(sys!, u0, tspan, p)
-    abstol = 1e-10
-    reltol = 1e-8
-    sol = solve(prob, abstol=abstol, reltol=reltol)
+    abstol = 1e-8
+    reltol = 1e-6
+    mean_time_step = 0.005
+    sol = solve(prob, abstol=abstol, reltol=reltol, saveat=mean_time_step)
     index = ceil(Int, length(sol) / 2)
     sol_t = sol.t[index:end]
     sol_u = sol.u[index:end]
     time_points = sol_t
     println("Solving finished.")
 
-    mean_time_step = 0.005
     t_start, t_end = time_points[1], time_points[end]
     t_interp = t_start:mean_time_step:t_end
     x_sol_1 = [real.(u[1]) for u in sol_u]
@@ -67,22 +67,6 @@ function solve_sys(p, u0=[0.1 + 0.1*im, 0.1 + 0.1*im, 0.1 + 0.1*im, 0.1 + 0.1*im
     x_sol_6 = [imag.(u[3]) for u in sol_u]
     x_sol_7 = [real.(u[4]) for u in sol_u]
     x_sol_8 = [imag.(u[4]) for u in sol_u]
-    interp_func_1 = LinearInterpolation(time_points, x_sol_1)
-    interp_func_2 = LinearInterpolation(time_points, x_sol_2)
-    interp_func_3 = LinearInterpolation(time_points, x_sol_3)
-    interp_func_4 = LinearInterpolation(time_points, x_sol_4)
-    interp_func_5 = LinearInterpolation(time_points, x_sol_5)
-    interp_func_6 = LinearInterpolation(time_points, x_sol_6)
-    interp_func_7 = LinearInterpolation(time_points, x_sol_7)
-    interp_func_8 = LinearInterpolation(time_points, x_sol_8)
-    x_sol_1 = [interp_func_1(t) for t in t_interp]
-    x_sol_2 = [interp_func_2(t) for t in t_interp]
-    x_sol_3 = [interp_func_3(t) for t in t_interp]
-    x_sol_4 = [interp_func_4(t) for t in t_interp]
-    x_sol_5 = [interp_func_5(t) for t in t_interp]
-    x_sol_6 = [interp_func_6(t) for t in t_interp]
-    x_sol_7 = [interp_func_7(t) for t in t_interp]
-    x_sol_8 = [interp_func_8(t) for t in t_interp]
     x = [x_sol_1, x_sol_2, x_sol_3, x_sol_4, x_sol_5, x_sol_6, x_sol_7, x_sol_8]
     return x, t_interp, mean_time_step
 end

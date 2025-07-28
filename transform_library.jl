@@ -189,7 +189,7 @@ function fitting_loss(freqs, vals, evenlope="exp_dB", return_fitted_params=false
     function loss(f, freqs, vals)
         fitted_vals = f.(freqs)
         residual = vals .- fitted_vals
-        return sum(residual .^ 2)  # Sum of squared differences
+        return sum(abs.(residual))  # Sum of squared differences
     end
 
     function multi_start_optimize(
