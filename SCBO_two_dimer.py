@@ -83,6 +83,9 @@ ub = [ub[i] + 0.0001 for i in range(11)]
 
 ub, lb = generate_bounds([0.5348356988269656, 0.9539459131310281, 1.3706409241248039, 1.0075697873925655, -0.9582053739454646, 0.3533010453018266, 0.08243808576203537, -0.9173040619954651, 0.9737381475497143, 0.21232344561167762, 0.7559953794996148])
 
+lb = [ 0.3744,  0.6678,  0.9594,  0.7053, -1.2457,  0.2473,  0.0577, -1.1925, 0.6816,  0.1486,  0.5292]
+ub = [ 0.6953,  1.2401,  1.7818,  1.3098, -0.6707,  0.4593,  0.1072, -0.6421, 1.2659,  0.2760,  0.9828]
+
 # print(f"ub: {ub}")
 # print(f"lb: {lb}")
 
@@ -622,7 +625,7 @@ def opt_BO(X, Y, max_its=50):
         df = pd.DataFrame(train_X_np, columns=train_X_columns)
         df['train_Y'] = train_Y_np
 
-        file_name = f"datasets/PI_{False}_{timestamp}.csv"
+        file_name = f"optimization_history/PI_{False}_{timestamp}.csv"
         df.to_csv(file_name, index=False)
 
         print(f"{len(train_X)}) Best value: {current_best_loss}")
