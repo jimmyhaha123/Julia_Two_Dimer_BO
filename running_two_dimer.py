@@ -254,5 +254,17 @@ def plot_from_csv_files(data_dir="datasets", output_dir="plots"):
 
     print(f"Plot saved to {file_name}")
 
+# Optimizing with normal BO; 
+def optimize_BO():
+    n_init = 50
+    max_its = 2000
+    X_init = get_initial_points(dim, n_init)
+    Y_init = torch.tensor([eval_objective(x) for x in X_init], **tkwargs).unsqueeze(-1)
 
-plot_from_csv_files()
+    best_loss_history, _, best_loss, best_X = opt_BO(
+                X=X_init, Y=Y_init, max_its=max_its
+            )
+    
+    print("Best loss history:", best_loss_history)
+    
+optimize_BO()

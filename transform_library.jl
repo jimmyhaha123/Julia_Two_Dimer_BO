@@ -174,6 +174,47 @@ end
 # Input vals are original magnitudes, not dB.
 # Optionally return fitted parameters for visualization.
 function fitting_loss(freqs, vals, evenlope="exp_dB", return_fitted_params=false, input_val_is_dB=false)
+
+    function is_well_separated(numbers::Vector{Float64}, a::Float64, n::Int; tol::Float64=0.05)::Bool
+        # Compute the gaps from the sorted numbers
+        sorted_numbers = sort(numbers)
+        gaps = diff(sorted_numbers)
+        if isempty(gaps)
+            return false
+        end
+    
+        # Define similarity: two gaps are similar if their relative difference is within tol.
+        similar(g1, g2, tol) = abs(g1 - g2) / ((g1 + g2) / 2) <= tol
+    
+        # Sort the gaps so that similar gap sizes come together
+        sorted_gaps = sort(gaps)
+    
+        clusters = Vector{Vector{Float64}}()  # to store clusters of similar gaps
+        current_cluster = [sorted_gaps[1]]
+    
+        # Cluster contiguous gaps in sorted order that are similar
+        for g in sorted_gaps[2:end]
+            # Use the mean of the current cluster as the representative value.
+            if similar(mean(current_cluster), g, tol)
+                push!(current_cluster, g)
+            else
+                push!(clusters, copy(current_cluster))
+                current_cluster = [g]
+            end
+        end
+        push!(clusters, copy(current_cluster))  # add the last cluster
+    
+        # Check each cluster for the conditions:
+        # cluster size > n and mean gap > a.
+        for cluster in clusters
+            if length(cluster) > n && mean(cluster) < a
+                println("Mean gap: ", mean(cluster))
+                return false
+            end
+        end
+    
+        return true
+    end
     # Note that now the subpeaks include the fundamental
     if !input_val_is_dB
         sub_peaks = vals[1:num]
@@ -190,6 +231,12 @@ function fitting_loss(freqs, vals, evenlope="exp_dB", return_fitted_params=false
         fitted_vals = f.(freqs)
         residual = vals .- fitted_vals
         return sum(abs.(residual))  # Sum of squared differences
+    end
+
+
+    if ~is_well_separated(freqs[2:num+1], 0.005, 15)  # Some peaks are too close together
+        println("Peaks too close together.")
+        return 50000
     end
 
     function multi_start_optimize(
@@ -231,8 +278,9 @@ function fitting_loss(freqs, vals, evenlope="exp_dB", return_fitted_params=false
 
     if evenlope == "exp_dB"
         # lambda, height, center
-        ub = [1000, sub_peaks[1], 1.5*sub_freqs[1]]
-        lb = [0, sub_peaks[3], 0.5*sub_freqs[1]]
+        spread = maximum(sub_freqs) - minimum(sub_freqs)
+        ub = [50000, sub_peaks[1], sub_freqs[1] + 0.15 * spread]
+        lb = [0, sub_peaks[3], sub_freqs[1] - 0.15 * spread]
 
         # 2 parameters to be fitted: lambda (slope) and height (height of center)
         function exp_dB_loss(params)
