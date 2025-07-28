@@ -55,18 +55,30 @@ plot(t_interp, tseries)
 show()
 
 
-# Storing peaks in CSV for loss testing purposes
-pks, vals = findmaxima(mag_transform)
-sorted_indices = sortperm(vals, rev=true)
-sorted_pks = pks[sorted_indices]
-sorted_vals = vals[sorted_indices] # Magnitude of peaks
-peak_frequencies = freqs[sorted_pks] # Frequency of peaks (here frequency is sorted)
-sorted_vals = sorted_vals[2:41]
-peak_frequencies = peak_frequencies[2:41]
+# Finding the peaks used in visualization
+# pks, vals = findmaxima(mag_transform)
+# sorted_indices = sortperm(vals, rev=true)
+# sorted_pks = pks[sorted_indices]
+# sorted_vals = vals[sorted_indices] # Magnitude of peaks
+# peak_frequencies = freqs[sorted_pks] # Frequency of peaks (here frequency is sorted)
+# sorted_vals = sorted_vals[2:41]
+# peak_frequencies = peak_frequencies[2:41]
+
+peak_frequencies, sorted_vals = locate_peaks(mag_transform, freqs, false)
+best_lambda, best_params = fitting_loss(peak_frequencies, sorted_vals, "exp_dB", true, true)
+sorted_vals = sorted_vals[1:40]
+peak_frequencies = peak_frequencies[1:40]
+peak_frequencies, sorted_vals = filter_freqs_and_vals(peak_frequencies, sorted_vals)
+
 
 
 #db scale
+center = peak_frequencies[1]
+lo, hi = 0.5*center, 1.5*center
 plot(freqs, mag_transform)
+plot(freqs, exp_f.(freqs, best_lambda, best_params[2], best_params[3]))
+xlim(0.5*center, 1.5*center)
+ylim(-150, 50)
 scatter(peak_frequencies, sorted_vals, c="red", marker="o", s=20, label="Peaks")
 show()
 

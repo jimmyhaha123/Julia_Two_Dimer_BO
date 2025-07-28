@@ -399,7 +399,7 @@ function objective(p, plt=false, transform_range=(0, 2.5))
     # println(initial_conditions[2])
     info = [[] for _ in 1:6]
     for ic in initial_conditions
-        try
+        # try
             # Solve system
             x, t_interp, mean_time_step = solve_sys(p, ic)
             # Repetition check        
@@ -432,13 +432,13 @@ function objective(p, plt=false, transform_range=(0, 2.5))
             losses = Float64[]
 
             for i in 1:length(transforms)
-                result = extract_peaks(mean_time_step, x[i], t_interp, repeat_index, transforms[i], transform_range, replication)
+                result = extract_peaks_with_MA(mean_time_step, x[i], t_interp, repeat_index, transforms[i], transform_range, replication)
                 push!(peak_frequencies, result[1])
                 push!(sorted_vals, result[2])
                 push!(mag_transforms, result[3])
                 push!(freqs, result[4])
                 push!(tseries, result[5])
-                push!(losses, float(smoothness_loss(result[1], result[2])))
+                push!(losses, float(fitting_loss(result[1], result[2])))
             end
             min_loss = minimum(losses)
             min_idx = argmin(losses)
@@ -454,16 +454,16 @@ function objective(p, plt=false, transform_range=(0, 2.5))
             push!(info[5], t_interp)
             push!(info[6], min_idx)
             # return min_loss, mag_transforms[min_idx], freqs[min_idx], tseries[min_idx], t_interp, min_idx
-        catch e
-            println("Error in ode: ", e)
-            push!(info[1], 55)
-            push!(info[2], [])
-            push!(info[3], [])
-            push!(info[4], [])
-            push!(info[5], [])
-            push!(info[6], 0)
-            # return num - 1, [], [], [], [], 0
-        end
+        # catch e
+        #     println("Error in ode: ", e)
+        #     push!(info[1], 55)
+        #     push!(info[2], [])
+        #     push!(info[3], [])
+        #     push!(info[4], [])
+        #     push!(info[5], [])
+        #     push!(info[6], 0)
+        #     # return num - 1, [], [], [], [], 0
+        # end
     end
     idx = argmin(info[1])
     println(info[1])

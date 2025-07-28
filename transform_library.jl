@@ -1,11 +1,30 @@
-using DifferentialEquations, FFTW, Statistics, BayesianOptimization, GaussianProcesses, Distributions, Peaks, Interpolations, DSP
+using DifferentialEquations, FFTW, Statistics, BayesianOptimization, GaussianProcesses, Distributions, Peaks, Interpolations, DSP, Optim, Random
 using Base: redirect_stdout
 
 
 num = 40
 min = 0
 
+# Takes in freqs and vals, only keep the freqs and vals within 0.5 to 1.5 of center peak
+function filter_freqs_and_vals(freqs, vals)
+    center_freq = freqs[1]
+    lower_bound = center_freq * 0.5
+    upper_bound = center_freq * 1.5
 
+    filtered_freqs = freqs[(freqs .>= lower_bound) .& (freqs .<= upper_bound)]
+    filtered_vals = vals[(freqs .>= lower_bound) .& (freqs .<= upper_bound)]
+
+    return filtered_freqs, filtered_vals
+end
+
+
+function exp_f(x_vals, lambda, height, center)
+    if x_vals < center
+        return lambda*(x_vals - center) + height
+    else
+        return -lambda*(x_vals - center) + height
+    end
+end
 # First replicate the signal by num, then fo Fourier Transform
 function augmented_fft(x, replication)
     x_extended = repeat(x, replication)
@@ -109,8 +128,7 @@ function highest_peak_deviation(freqs, vals)
         println("Peaks too close together.")
         return min
     else
-        sub_peaks = vals[2:num+1]
-        sub_peaks = sub_peaks / sub_peaks[1] # Normalization with respect to second peak
+        sub_peaks = to_dB_and_normalize(vals[2:num+1])
         cost = sum(abs.(sub_peaks .- 1))
         # println("Sucessful. Loss: " * string(cost))
         return cost
@@ -151,6 +169,94 @@ function smoothness_loss(freqs, vals)
         return deviation_loss + smoothness_loss
     end
 end
+
+# The objective function that fits envelopes for loss. 
+# Input vals are original magnitudes, not dB.
+# Optionally return fitted parameters for visualization.
+function fitting_loss(freqs, vals, evenlope="exp_dB", return_fitted_params=false, input_val_is_dB=false)
+    # Note that now the subpeaks include the fundamental
+    if !input_val_is_dB
+        sub_peaks = vals[1:num]
+        sub_peaks = sub_peaks ./ sub_peaks[2]  # Normalization with respect to second peak
+        sub_peaks = 20*log10.(sub_peaks)
+    else
+        sub_peaks = vals[1:num]
+    end
+    sub_freqs = freqs[1:num]
+    sub_freqs, sub_peaks = filter_freqs_and_vals(sub_freqs, sub_peaks)
+
+    # The fitting loss funtion, takes in f, freqs and vals, return residue
+    function loss(f, freqs, vals)
+        fitted_vals = f.(freqs)
+        residual = vals .- fitted_vals
+        return sum(residual .^ 2)  # Sum of squared differences
+    end
+
+    function multi_start_optimize(
+        loss_func::Function,
+        lb::AbstractVector{<:Real},
+        ub::AbstractVector{<:Real};
+        n_restarts::Int = 20,
+        inner_algo = LBFGS(),
+        options = Optim.Options(g_tol=1e-8, f_tol=1e-8)
+    )
+        d = length(lb)
+        @assert length(ub) == d "lb and ub must have same length"
+
+        best_res = nothing
+        best_val = Inf
+        best_params = nothing
+
+        for i in 1:n_restarts
+            # random init in [lb, ub]
+            θ0 = lb .+ rand(d) .* (ub .- lb)
+
+            res = Optim.optimize(
+                loss_func,
+                lb, ub,
+                θ0,
+                Fminbox(inner_algo),
+                options
+            )
+
+            if res.minimum < best_val
+                best_val = res.minimum
+                best_res = res
+                best_params = res.minimizer
+            end
+        end
+
+        return best_params, best_res, best_val
+    end
+
+    if evenlope == "exp_dB"
+        # lambda, height, center
+        ub = [1000, sub_peaks[1], 1.5*sub_freqs[1]]
+        lb = [0, sub_peaks[3], 0.5*sub_freqs[1]]
+
+        # 2 parameters to be fitted: lambda (slope) and height (height of center)
+        function exp_dB_loss(params)
+            lambda = params[1]
+            height = params[2]
+            center = params[3]
+            return loss(x -> exp_f(x, lambda, height, center), sub_freqs, sub_peaks)
+        end
+        best_params, best_res, best_val = multi_start_optimize(
+            exp_dB_loss, lb, ub; n_restarts=10
+        )
+        # print("Best parameters: ", best_params, " with loss: ", best_val, "\n")
+
+        best_lambda = best_params[1]
+
+        if return_fitted_params
+            return best_lambda, best_params
+        else
+            return best_lambda
+        end
+    end
+end
+
+
 
 # Repetition check
 function repetition_check(x, t_interp)
@@ -212,3 +318,113 @@ end
 function isclose(point1, point2, eps)
     return all(abs.(point1 - point2) .< eps)
 end
+
+# Extracting peaks, but with MA to remove background noise
+function extract_peaks_with_MA(mean_time_step, x_sol, t_interp, repeat_index,
+                               transform, transform_range, replication)
+    # 1) Build the frequency axis
+    N = length(x_sol) * replication
+    dt = mean_time_step
+    freq_axis = (0:N-1) ./ (N * dt)         # broadcasting gives a Vector
+    half_N    = ceil(Int, N ÷ 2)
+    freq_axis = freq_axis[1:half_N]        # first half (positive freqs)
+
+    # 2) Compute the one-sided power spectrum
+    mag_transform = abs.(transform[1:half_N]).^2
+
+    # 3) Locate & sort peaks
+    peak_frequencies, sorted_vals = locate_peaks(mag_transform, freq_axis)
+
+    return peak_frequencies, sorted_vals, mag_transform, freq_axis, x_sol
+end
+
+"""
+    locate_peaks(mag_transform, freq_axis; window_size=150)
+
+Given a power spectrum `mag_transform` and its `freq_axis`, this:
+
+  1. Estimates a smooth baseline via moving average of width `window_size`  
+  2. Subtracts that baseline to flatten the spectrum  
+  3. Finds local maxima in the residual  
+  4. Returns their frequencies & magnitudes sorted by descending magnitude
+"""
+function extract_peaks_with_MA(mean_time_step, x_sol, t_interp, repeat_index,
+                               transform, transform_range, replication)
+    # 1) Build freq_axis as a Vector, not a StepRangeLen
+    N = length(x_sol) * replication
+    dt = mean_time_step
+    freq_axis = collect(0:N-1) ./ (N * dt)
+    half_N    = ceil(Int, N ÷ 2)
+    freq_axis = freq_axis[1:half_N]
+
+    # 2) One‑sided power spectrum
+    mag_transform = abs.(transform[1:half_N]).^2
+
+    # 3) Locate & sort peaks
+    peak_frequencies, sorted_vals = locate_peaks(mag_transform, freq_axis)
+
+    return peak_frequencies, sorted_vals, mag_transform, freq_axis, x_sol
+end
+
+"""
+    locate_peaks(mag_transform, freq_axis; window_size=150)
+
+1. Estimate a smooth baseline via moving average  
+2. Subtract it (flatten the spectrum)  
+3. Find local maxima in the residual  
+4. Return their freqs & magnitudes sorted descending
+"""
+function locate_peaks(mag_transform::AbstractVector{<:Real},
+                      freq_axis   ::AbstractVector{<:Real},
+                      take_log = true)
+
+    # 1) Estimate & subtract baseline
+    window_size = 150
+    if take_log
+        log_transform = 20 * log10.(mag_transform)
+        baseline = moving_average(log_transform, window_size)
+        residual = log_transform .- baseline
+    else
+        residual = mag_transform .- moving_average(mag_transform, window_size)
+    end
+
+    # 2) Find all local maxima in the residual
+    inds = [ i for i in 2:length(residual)-1
+             if residual[i] > residual[i-1] && residual[i] > residual[i+1] ]
+    inds = filter(i -> residual[i] > 0, inds)   # keep only positive bumps
+
+    # 3) Pull **raw** magnitudes at those indices
+    raw_vals  = mag_transform[inds]
+    peak_fqs  = freq_axis[inds]
+
+    # 4) Sort by raw magnitude (largest first)
+    ord = sortperm(raw_vals, rev=true)
+    return peak_fqs[ord], raw_vals[ord]
+end
+
+"""
+    moving_average(x, w)
+
+Centered moving average of window `w` over `x`, using Base.max/min
+and Statistics.mean so nothing gets shadowed.
+"""
+function moving_average(x::AbstractVector{T}, w::Int) where T
+    n    = length(x)
+    half = fld(w, 2)
+    y    = similar(x)
+    for i in 1:n
+        lo = Base.max(1,      i-half)
+        hi = Base.min(n,      i+half)
+        y[i] = Statistics.mean(x[lo:hi])
+    end
+    return y
+end
+
+# Convert to dB and normalize with respect to the first value
+function to_dB_and_normalize(vec)
+    vec = vec ./vec[1]
+    vec =  20 * log10.(vec)
+    return vec
+end
+
+
