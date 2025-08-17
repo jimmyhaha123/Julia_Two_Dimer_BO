@@ -376,7 +376,9 @@ end
 
 
 # Takes in parameters, generate loss, transform plot, and time series plot
-function objective(p, plt=false, transform_range=(0, 2.5))
+# Return all resonators: returns the time series of all resonators
+# Return specific transform: returns the transform of a specific resonator; -1 for returning the min index
+function objective(p, return_all_resonators=false, return_specific_transform=-1)
     initial_conditions = []
     push!(initial_conditions, [0.1 + 0.1im, 0.1 + 0.1im, 0.1 + 0.1im, 0.1 + 0.1im])
     # push!(initial_conditions, get_max_fixed_point(p))
@@ -416,7 +418,7 @@ function objective(p, plt=false, transform_range=(0, 2.5))
             losses = Float64[]
 
             for i in 1:length(transforms)
-                result = extract_peaks_with_MA(mean_time_step, x[i], t_interp, repeat_index, transforms[i], transform_range, replication)
+                result = extract_peaks_with_MA(mean_time_step, x[i], t_interp, repeat_index, transforms[i], replication)
                 push!(peak_frequencies, result[1])
                 push!(sorted_vals, result[2])
                 push!(mag_transforms, result[3])
@@ -425,7 +427,11 @@ function objective(p, plt=false, transform_range=(0, 2.5))
                 push!(losses, float(fitting_loss(result[1], result[2])))
             end
             min_loss = minimum(losses)
-            min_idx = argmin(losses)
+            if return_specific_transform == -1
+                min_idx = argmin(losses)
+            else
+                min_idx = return_specific_transform
+            end
 
             #db scale
             mag_transforms[min_idx] = mag_transforms[min_idx] / sorted_vals[min_idx][2]
@@ -434,7 +440,12 @@ function objective(p, plt=false, transform_range=(0, 2.5))
             push!(info[1], min_loss)
             push!(info[2], mag_transforms[min_idx])
             push!(info[3], freqs[min_idx])
-            push!(info[4], tseries[min_idx])
+            if return_all_resonators
+                print("Min loss index (from 1 to 8): " * string(min_idx) * "\n")
+                push!(info[4], tseries)
+            else
+                push!(info[4], tseries[min_idx])
+            end
             push!(info[5], t_interp)
             push!(info[6], min_idx)
             # return min_loss, mag_transforms[min_idx], freqs[min_idx], tseries[min_idx], t_interp, min_idx
@@ -449,7 +460,7 @@ function objective(p, plt=false, transform_range=(0, 2.5))
             # return num - 1, [], [], [], [], 0
         end
     end
-    idx = argmin(info[1])
+    idx = argmin(info[1])  # This argmin corresponds to the minimum loss across all initial conditions
     println(info[1])
     return info[1][idx], info[2][idx], info[3][idx], info[4][idx], info[5][idx], info[6][idx]
 end

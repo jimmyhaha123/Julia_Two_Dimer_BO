@@ -17,6 +17,13 @@ function filter_freqs_and_vals(freqs, vals)
     return filtered_freqs, filtered_vals
 end
 
+# Takes in freqs, normalize such that fo lies at 0, 0.5fo lies at -1, 1.5fo lies at 1
+function normalize_freqs(freqs)
+    center_freq = freqs[1]
+    normalized_freqs = (freqs .- center_freq) ./ (0.5 * center_freq)
+    return normalized_freqs
+end
+
 
 function exp_f(x_vals, lambda, height, center)
     if x_vals < center
@@ -369,7 +376,7 @@ end
 
 # Extracting peaks, but with MA to remove background noise
 function extract_peaks_with_MA(mean_time_step, x_sol, t_interp, repeat_index,
-                               transform, transform_range, replication)
+                               transform, replication)
     # 1) Build the frequency axis
     N = length(x_sol) * replication
     dt = mean_time_step
